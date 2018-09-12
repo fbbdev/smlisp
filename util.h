@@ -8,11 +8,16 @@
 #include <assert.h>
 #endif
 
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 // Macros
-#define alignof(type) offsetof(struct { char c; type d; }, d)
+#define sm_unused(value) ((void) (value))
+#define sm_alignof(type) offsetof(struct { char c; type d; }, d)
 
 // Incapsulate a reference to arbitrary contiguous data (for map/set keys)
 typedef struct SmKey {
@@ -39,12 +44,20 @@ inline SmKey sm_string_key(void const* element) {
     return (SmKey){ str->data, str->length };
 }
 
+// Memory management
 inline void* sm_aligned_alloc(size_t alignment, size_t size) {
 #if (__STDC_VERSION__ >= 201112L)
     void* ptr = aligned_alloc(alignment, size);
 #else
+    sm_unused(alignment);
     void* ptr = malloc(size);
 #endif
     assert(ptr != NULL);
     return ptr;
+}
+
+// Testing
+inline bool sm_test(char const* desc, bool result) {
+    printf("[%s] %s\n", result ? " OK " : "FAIL", desc);
+    return result;
 }

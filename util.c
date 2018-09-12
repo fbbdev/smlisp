@@ -4,6 +4,7 @@
 extern inline SmString sm_string_from_cstring(char const* str);
 extern inline SmKey sm_string_key(void const* element);
 extern inline void* sm_aligned_alloc(size_t alignment, size_t size);
+extern inline bool sm_test(char const* desc, bool result);
 
 // Key functions
 int sm_key_compare(SmKey lhs, SmKey rhs) {

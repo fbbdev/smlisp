@@ -1,5 +1,6 @@
 #include "rbtree.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 // Inlines
@@ -7,22 +8,33 @@ extern inline SmRBTree sm_string_rbtree();
 extern inline bool sm_rbtree_empty(SmRBTree const* tree);
 
 // Private types
-enum Color {
+typedef enum Color {
     Red = 0,
     Black
-};
+} Color;
 
 typedef struct SmRBTreeNode {
+    Color color;
+
     struct SmRBTreeNode* parent;
     struct SmRBTreeNode* left;
     struct SmRBTreeNode* right;
 
-    Color color;
-
     uint8_t data[];
 } Node;
 
-static Node LEAF[1] = { { NULL, NULL, NULL, Black } };
+typedef struct AlignedLikeNode {
+    Color color;
+
+    struct SmRBTreeNode* parent;
+    struct SmRBTreeNode* left;
+    struct SmRBTreeNode* right;
+
+    uint8_t data[1];
+} AlignedLikeNode;
+
+static Node LEAF_v = { Black, NULL, NULL, NULL };
+static Node* const LEAF = &LEAF_v;
 
 // Private methods
 static inline Node* node_grandparent(Node* n) {
@@ -35,19 +47,19 @@ static inline Node* node_sibling(Node* n) {
 }
 
 static inline Node* node_uncle(Node* n) {
-    return n->parent ? sibling(n->parent) : NULL;
+    return n->parent ? node_sibling(n->parent) : NULL;
 }
 
 static inline size_t node_size(SmRBTree const* tree) {
-    return offsetof(Node, element) + tree->node_padding + tree->element_size;
+    return offsetof(Node, data) + tree->node_padding + tree->element_size;
 }
 
-static inline Node* node(SmRBTree const* tree, Node* parent, void const* element) {
+static inline Node* node_new(SmRBTree const* tree, Node* parent, void const* element) {
     Node* node = sm_aligned_alloc(tree->node_alignment, node_size(tree));
 
+    node->color = Red;
     node->parent = parent;
     node->left = node->right = LEAF;
-    node->color = Red;
 
     memcpy(node->data + tree->node_padding, element, tree->element_size);
 
@@ -56,9 +68,11 @@ static inline Node* node(SmRBTree const* tree, Node* parent, void const* element
 
 static Node* tree_clone(SmRBTree const* tree, Node const* root) {
     if (!root || root == LEAF)
-        return root;
+        return (Node*) root;
 
     Node* clone = sm_aligned_alloc(tree->node_alignment, node_size(tree));
+
+    clone->color = root->color;
 
     clone->parent = NULL;
 
@@ -69,8 +83,6 @@ static Node* tree_clone(SmRBTree const* tree, Node const* root) {
     clone->right = tree_clone(tree, root->right);
     if (clone->right != LEAF)
         clone->right->parent = clone;
-
-    clone->color = root->color;
 
     memcpy(clone->data + tree->node_padding, root->data + tree->node_padding, tree->element_size);
 
@@ -138,51 +150,136 @@ static void rotate_right(Node* n) {
 }
 
 static void repair_after_insert(SmRBTree* tree, Node* n) {
-    if (!n->parent) {
-        n->color = Black;
-    } else if (n->parent->color != Black) { // Implies parent is not root
-        Node* g = node_grandparent(n);
-        Node* u = node_uncle(n);
+    while (1) { // Use a loop to avoid recursion
+        if (!n->parent) {
+            n->color = Black;
+        } else if (n->parent->color != Black) { // Implies parent is not root
+            Node* g = node_grandparent(n);
+            Node* u = node_uncle(n);
 
-        if (u->color == Red) {
-            n->parent->color = Black;
-            u->color = Black;
-            g->color = Red;
-            return repair_after_insert(g); // Tail call
-        } else {
-            // Bring n on the outside of g
-            if (n == g->left->right) {
-                rotate_left(n->parent);
-                n = n->left;
-            } else if (n == g->right->left) {
-                rotate_right(n->parent);
-                n = n->right;
+            if (u->color == Red) {
+                n->parent->color = Black;
+                u->color = Black;
+                g->color = Red;
+                n = g; continue; // Move up in the tree and loop around
+            } else {
+                // Bring n on the outside of g
+                if (n == g->left->right) {
+                    rotate_left(n->parent);
+                    n = n->left;
+                } else if (n == g->right->left) {
+                    rotate_right(n->parent);
+                    n = n->right;
+                }
+
+                // Rotate g
+                if (n == n->parent->left)
+                    rotate_right(g);
+                else
+                    rotate_left(g);
+
+                g->parent->color = Black;
+                g->color = Red;
+
+                // Update root if necessary
+                if (!g->parent->parent)
+                    tree->root = g->parent;
             }
+        }
 
-            // Rotate g
-            if (n == n->parent->left)
-                rotate_right(g);
-            else
-                rotate_left(g);
+        break; // We're done
+    }
+}
 
-            g->parent->color = Black;
-            g->color = Red;
+static void repair_after_erase(SmRBTree* tree, Node* n, Node* p) {
+    // n could be a leaf node so get sibling through p (never use n->parent)
+    Node* s = (n == p->left) ? p->right : p->left;
 
-            // Update root
-            if (!g->parent->parent)
-                tree->root = g->parent;
+    // This function is called only when n and its previous parent were both
+    // black, so n's sibling cannot be a leaf
+    while (p->color == Black && s->color == Black &&
+           s->left->color == Black && s->right->color == Black) {
+        // Rebalance sibling
+        s->color = Red;
+
+        // If p is root, we're done
+        if (!p->parent)
+            return;
+
+        // Otherwise, rebalance p's sibling (loop)
+        s = (p == p->parent->left) ? p->parent->right : p->parent->left;
+        p = p->parent;
+        n = p;
+    }
+
+    if (s->color == Red) {
+        p->color = Red;
+        s->color = Black;
+
+        if (n == p->left) {
+            rotate_left(p);
+            s = p->right;
+        } else {
+            rotate_right(p);
+            s = p->left;
+        }
+
+        // Update root if necessary
+        if (!p->parent->parent)
+            tree->root = s;
+    }
+
+    // s is still not a leaf
+    if (p->color == Red && s->color == Black &&
+        s->left->color == Black && s->right->color == Black)
+    {
+        s->color = Red;
+        p->color = Black;
+        return;
+    }
+
+    if (s->color == Black) {
+        if (n == p->left && s->left->color == Red && s->right->color == Black) {
+            s->color = Red;
+            s->left->color = Black;
+            rotate_right(s);
+            s = s->parent;
+        } else if (n == p->right && s->right->color == Red && s->left->color == Black) {
+            s->color = Red;
+            s->right->color = Black;
+            rotate_left(s);
+            s = s->parent;
         }
     }
+    // In this last case, s was not a leaf and child was red,
+    // so s is still not a leaf
+
+    s->color = p->color;
+    p->color = Black;
+
+    if (n == p->left) {
+        s->right->color = Black;
+        rotate_left(p);
+    } else {
+        s->left->color = Black;
+        rotate_right(p);
+    }
+
+    // Update root if necessary
+    if (!p->parent->parent)
+        tree->root = p->parent;
 }
 
 // Lifetime management
 SmRBTree sm_rbtree(size_t element_size, size_t element_alignment, SmKeyFunction key) {
-    size_t padding = element_alignment - (offsetof(Node, element) % element_alignment);
-    size_t alignment = (element_alignment > alignof(Node)) ? element_alignment : alignof(Node);
+    size_t padding = element_alignment - (sizeof(Node) % element_alignment);
+    size_t alignment = (element_alignment > sm_alignof(AlignedLikeNode)) ? element_alignment : sm_alignof(AlignedLikeNode);
 
     return (SmRBTree){
         element_size,
-        padding,
+        // Make data begin after the struct so that we can assign safely
+        // See C99 standard §6.7.2.1.21
+        padding + (sizeof(Node) - offsetof(Node, data)),
         alignment,
         key,
         NULL
@@ -191,7 +288,7 @@ SmRBTree sm_rbtree(size_t element_size, size_t element_alignment, SmKeyFunction 
 
 SmRBTree sm_rbtree_clone(SmRBTree const* tree) {
     SmRBTree clone = *tree;
-    clone.root = tree_clone(tree->root);
+    clone.root = tree_clone(tree, tree->root);
     return clone;
 }
 
@@ -204,7 +301,7 @@ void sm_rbtree_drop(SmRBTree* tree) {
 void* sm_rbtree_insert(SmRBTree* tree, void const* element) {
     // If empty, create root directly
     if (!tree->root) {
-        tree->root = node(tree, NULL, element);
+        tree->root = node_new(tree, NULL, element);
         tree->root->color = Black;
         return tree->root->data + tree->node_padding;
     }
@@ -228,7 +325,7 @@ void* sm_rbtree_insert(SmRBTree* tree, void const* element) {
         return node_element;
 
     // Insert new node
-    node = node(tree, node, element);
+    node = node_new(tree, node, element);
     node_element = node->data + tree->node_padding;
 
     if (cmp < 0)
@@ -237,14 +334,14 @@ void* sm_rbtree_insert(SmRBTree* tree, void const* element) {
         node->parent->right = node;
 
     // Repair tree
-    repair_after_insert(root, node);
+    repair_after_insert(tree, node);
 
     return node_element;
 }
 
 void sm_rbtree_erase(SmRBTree* tree, void* element) {
     // Find node from element
-    Node* node = (Node*) (((uint8_t*) element) + tree->element_size - tree->node_size);
+    Node* node = (Node*) (((uint8_t*) element) + tree->element_size - node_size(tree));
 
     if (node->left != LEAF && node->right != LEAF) {
         // If node has two non-leaf children, swap it with predecessor
@@ -252,33 +349,45 @@ void sm_rbtree_erase(SmRBTree* tree, void* element) {
         while (predecessor->right != LEAF)
             predecessor = predecessor->right;
 
-        Node* tmpn = predecessor->parent;
-        predecessor->parent = node->parent;
-        node->parent = (tmpn != node) ? tmpn : predecessor;
+        Node tmpn = *predecessor;
+        *predecessor = *node;
+        *node = tmpn;
 
-        tmpn = predecessor->left;
-        predecessor->left = (node->left != predecessor) ? node->left : node;
-        node->left = tmpn;
-
-        tmpn = predecessor->right;
-        predecessor->right = node->right;
-        node->right = tmpn;
-
-        Color tmpc = predecessor->color;
-        predecessor->color = node->color;
-        node->color = tmpc;
+        if (predecessor->left == predecessor) {
+            predecessor->left = node;
+            node->parent = predecessor;
+        }
 
         // Update root if necessary
         if (!predecessor->parent)
             tree->root = predecessor;
     }
 
+    // Replace node with (possibly) non-leaf child
     Node* child = (node->left != LEAF) ? node->left : node->right;
-    
+    bool was_black = child->color == Black;
 
-    if (node->color == Red) {
-        node->parent->
+    if (child != LEAF) {
+        child->parent = node->parent;
+        child->color = Black;
     }
+
+    if (!node->parent) {
+        // Node is root, update the pointer and we're done
+        tree->root = (child == LEAF) ? NULL : child;
+        return;
+    }
+
+    // Node is not root, repair the tree
+    if (node == node->parent->left)
+        node->parent->left = child;
+    else
+        node->parent->right = child;
+
+    if (node->color == Black && was_black)
+        repair_after_erase(tree, child, node->parent);
+
+    free(node);
 }
 
 // Lookup
@@ -286,7 +395,7 @@ void* sm_rbtree_find(SmRBTree const* tree, void const* element) {
     return sm_rbtree_find_by_key(tree, tree->key(element));
 }
 
-void* sm_rbtree_find_by_key(SmRBTree const* tree, SmRBTreeKey key) {
+void* sm_rbtree_find_by_key(SmRBTree const* tree, SmKey key) {
     if (!tree->root)
         return NULL;
 

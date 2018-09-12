@@ -17,7 +17,7 @@ typedef struct SmRBTree {
 SmRBTree sm_rbtree(size_t element_size, size_t element_alignment, SmKeyFunction key);
 
 inline SmRBTree sm_string_rbtree() {
-    return sm_rbtree(sizeof(SmString), alignof(SmString), sm_string_key);
+    return sm_rbtree(sizeof(SmString), sm_alignof(SmString), sm_string_key);
 }
 
 SmRBTree sm_rbtree_clone(SmRBTree const* tree);
@@ -36,4 +36,4 @@ void sm_rbtree_erase(SmRBTree* tree, void* element);
 
 // Lookup
 void* sm_rbtree_find(SmRBTree const* tree, void const* element);
-void* sm_rbtree_find_by_key(SmRBTree const* tree, SmRBTreeKey key);
+void* sm_rbtree_find_by_key(SmRBTree const* tree, SmKey key);
