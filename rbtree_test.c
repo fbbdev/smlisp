@@ -192,8 +192,18 @@ int main() {
     status &= sm_test("sm_rbtree_empty should return true after sm_rbtree_erase on last element",
         sm_rbtree_empty(&tree) == true);
 
-    sm_rbtree_drop(&tree);
-    status &= sm_test("sm_rbtree_empty should return true after sm_rbtree_drop",
+    bool insertion_ok = true;
+    for (size_t i = 0; i < (sizeof(str)/sizeof(SmString)); ++i)
+        insertion_ok = (sm_rbtree_insert(&tree, &str[i]) != NULL) && insertion_ok;
+
+    status &= sm_test("sm_rbtree_insert should always succeed on non-empty trees", insertion_ok);
+    status &= sm_test("sm_rbtree_empty should return false after some insertions",
+        sm_rbtree_empty(&tree) == false);
+    status &= sm_test("tree should be valid after any number of insertions",
+        validate_tree(tree.root, NULL, &tree, NULL));
+
+    sm_rbtree_clear(&tree);
+    status &= sm_test("sm_rbtree_empty should return true after sm_rbtree_clear",
         sm_rbtree_empty(&tree) == true);
 
     return status ? 0 : -1;
