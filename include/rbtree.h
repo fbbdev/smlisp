@@ -28,11 +28,17 @@ inline bool sm_rbtree_empty(SmRBTree const* tree) {
     return tree->root == NULL;
 }
 
+size_t sm_rbtree_size(SmRBTree const* tree);
+
 // Modifiers
 #define sm_rbtree_clear sm_rbtree_drop
 
 void* sm_rbtree_insert(SmRBTree* tree, void const* element);
-void sm_rbtree_erase(SmRBTree* tree, void* element);
+void sm_rbtree_erase(SmRBTree* tree, void* element); // XXX: sm_rbtree_erase wants element pointers FROM THE TREE!!
+
+// Iteration
+void* sm_rbtree_first(SmRBTree const* tree);
+void* sm_rbtree_next(void* element);
 
 // Lookup
 void* sm_rbtree_find(SmRBTree const* tree, void const* element);

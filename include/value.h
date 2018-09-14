@@ -1,9 +1,10 @@
 #pragma once
 
+#include "number.h"
 #include "util.h"
+#include "word.h"
 
 #include <stdbool.h>
-#include <stdint.h>
 
 typedef enum SmType {
     // Atoms
@@ -16,39 +17,30 @@ typedef enum SmType {
     SmTypeList,
     SmTypeCall,       // Unquoted list
 
-    // Number of types
+    // Count of types
     SmTypeCount
 } SmType;
-
-typedef struct SmList SmList;
 
 typedef struct SmValue {
     SmType type;
 
     union {
-        int64_t number;
-        uintptr_t word;
-        SmList* list;
+        SmNumber number;
+        SmWord word;
+        struct SmList* list;
     } data;
 } SmValue;
 
-struct SmList {
+typedef struct SmList {
     SmValue car;
     SmValue cdr;
 
-    uint32_t ref_count;
-};
-
-// Word functions
-uintptr_t sm_word(SmString str);
-
-inline SmString sm_word_str(uintptr_t word) {
-    return *((SmString*) word);
-}
+    uintptr_t ref_count;
+} SmList;
 
 // SmList functions
 SmList* sm_list_cons(SmValue car, SmValue cdr);
-SmList* sm_list_clone(SmList* lst);
+SmList* sm_list_clone(SmList* lst); // XXX: DO NOT USE with circular lists!!
 void sm_list_drop(SmList* lst);
 
 inline void sm_list_ref(SmList* lst) {
@@ -57,16 +49,16 @@ inline void sm_list_ref(SmList* lst) {
 
 void sm_list_unref(SmList* lst);
 
-// SmValue functions
+// Value functions
 inline SmValue sm_value_nil() {
     return (SmValue){ SmTypeNil, { .list = NULL } };
 }
 
-inline SmValue sm_value_number(int64_t number) {
+inline SmValue sm_value_number(SmNumber number) {
     return (SmValue){ SmTypeNumber, { .number = number } };
 }
 
-inline SmValue sm_value_word(uintptr_t word, bool quoted) {
+inline SmValue sm_value_word(SmWord word, bool quoted) {
     return (SmValue){ quoted ? SmTypeWord : SmTypeReference, { .word = word } };
 }
 
@@ -81,6 +73,7 @@ inline SmValue sm_value_dup(SmValue value) {
     return value;
 }
 
+// XXX: DO NOT USE with circular lists!!
 inline SmValue sm_value_clone(SmValue value) {
     SmValue clone = value;
 
@@ -95,4 +88,28 @@ inline SmValue sm_value_clone(SmValue value) {
 inline void sm_value_drop(SmValue value) {
     if (value.type == SmTypeList)
         sm_list_unref(value.data.list);
+}
+
+inline bool sm_value_is_nil(SmValue value) {
+    return value.type == SmTypeNil;
+}
+
+inline bool sm_value_is_number(SmValue value) {
+    return value.type == SmTypeNumber;
+}
+
+inline bool sm_value_is_word(SmValue value) {
+    return value.type == SmTypeWord || value.type == SmTypeReference;
+}
+
+inline bool sm_value_is_list(SmValue value) {
+    return value.type == SmTypeList || value.type == SmTypeCall;
+}
+
+inline bool sm_value_is_unquoted(SmValue value) {
+    return value.type == SmTypeCall || value.type == SmTypeReference;
+}
+
+inline bool sm_value_is_quoted(SmValue value) {
+    return value.type != SmTypeCall && value.type != SmTypeReference;
 }

@@ -1,4 +1,5 @@
 #include "rbtree.h"
+#include "rbtree_p.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -7,36 +8,11 @@
 extern inline SmRBTree sm_string_rbtree();
 extern inline bool sm_rbtree_empty(SmRBTree const* tree);
 
-// Private types
-typedef enum Color {
-    Red = 0,
-    Black
-} Color;
-
-typedef struct SmRBTreeNode {
-    Color color;
-
-    struct SmRBTreeNode* parent;
-    struct SmRBTreeNode* left;
-    struct SmRBTreeNode* right;
-
-    uint8_t data[];
-} Node;
-
-typedef struct AlignedLikeNode {
-    Color color;
-
-    struct SmRBTreeNode* parent;
-    struct SmRBTreeNode* left;
-    struct SmRBTreeNode* right;
-
-    uint8_t data[1];
-} AlignedLikeNode;
-
-static Node LEAF_v = { Black, NULL, NULL, NULL };
+// Leaf node
+static Node LEAF_v = { NULL, NULL, NULL, Black };
 static Node* const LEAF = &LEAF_v;
 
-// Private methods
+// Private helpers
 static inline Node* node_grandparent(Node* n) {
     return n->parent ? n->parent->parent : NULL;
 }
@@ -57,9 +33,9 @@ static inline size_t node_size(SmRBTree const* tree) {
 static inline Node* node_new(SmRBTree const* tree, Node* parent, void const* element) {
     Node* node = sm_aligned_alloc(tree->node_alignment, node_size(tree));
 
-    node->color = Red;
     node->parent = parent;
     node->left = node->right = LEAF;
+    node->color = Red;
 
     memcpy(node->data + tree->node_padding, element, tree->element_size);
 
@@ -72,8 +48,6 @@ static Node* tree_clone(SmRBTree const* tree, Node const* root) {
 
     Node* clone = sm_aligned_alloc(tree->node_alignment, node_size(tree));
 
-    clone->color = root->color;
-
     clone->parent = NULL;
 
     clone->left = tree_clone(tree, root->left);
@@ -83,6 +57,8 @@ static Node* tree_clone(SmRBTree const* tree, Node const* root) {
     clone->right = tree_clone(tree, root->right);
     if (clone->right != LEAF)
         clone->right->parent = clone;
+
+    clone->color = root->color;
 
     memcpy(clone->data + tree->node_padding, root->data + tree->node_padding, tree->element_size);
 
@@ -102,12 +78,17 @@ static void tree_drop(Node* root) {
     tree_drop(right);
 }
 
+static size_t tree_size(Node* root) {
+    return (!root || root == LEAF) ?
+        0 : 1 + tree_size(root->left) + tree_size(root->right);
+}
+
 // Repair functions (private)
 static void rotate_left(Node* n) {
     Node* nnew = n->right;
     Node* p = n->parent;
 
-    assert(nnew != LEAF);
+    sm_assert(nnew != LEAF);
 
     n->right = nnew->left;
     nnew->left = n;
@@ -130,7 +111,7 @@ static void rotate_right(Node* n) {
     Node* nnew = n->left;
     Node* p = n->parent;
 
-    assert(nnew != LEAF);
+    sm_assert(nnew != LEAF);
 
     n->left = nnew->right;
     nnew->right = n;
@@ -272,15 +253,14 @@ static void repair_after_erase(SmRBTree* tree, Node* n, Node* p) {
 
 // Lifetime management
 SmRBTree sm_rbtree(size_t element_size, size_t element_alignment, SmKeyFunction key) {
-    size_t padding = element_alignment - (sizeof(Node) % element_alignment);
-    size_t alignment = (element_alignment > sm_alignof(AlignedLikeNode)) ? element_alignment : sm_alignof(AlignedLikeNode);
+    size_t padding = (element_alignment - sizeof(Node)%element_alignment) % element_alignment;
 
     return (SmRBTree){
         element_size,
         // Make data begin after the struct so that we can assign safely
         // See C99 standard §6.7.2.1.21
         padding + (sizeof(Node) - offsetof(Node, data)),
-        alignment,
+        sm_common_alignment(element_alignment, sm_alignof(Node)),
         key,
         NULL
     };
@@ -297,8 +277,16 @@ void sm_rbtree_drop(SmRBTree* tree) {
     tree->root = NULL;
 }
 
+// Capacity
+size_t sm_rbtree_size(SmRBTree const* tree) {
+    return tree_size(tree->root);
+}
+
 // Modifiers
 void* sm_rbtree_insert(SmRBTree* tree, void const* element) {
+    if (!element)
+        return NULL;
+
     // If empty, create root directly
     if (!tree->root) {
         tree->root = node_new(tree, NULL, element);
@@ -340,6 +328,9 @@ void* sm_rbtree_insert(SmRBTree* tree, void const* element) {
 }
 
 void sm_rbtree_erase(SmRBTree* tree, void* element) {
+    if (!element)
+        return;
+
     // Find node from element
     Node* node = (Node*) (((uint8_t*) element) + tree->element_size - node_size(tree));
 
@@ -353,10 +344,15 @@ void sm_rbtree_erase(SmRBTree* tree, void* element) {
         *predecessor = *node;
         *node = tmpn;
 
-        if (predecessor->left == predecessor) {
+
+        if (predecessor->left == predecessor)
             predecessor->left = node;
-            node->parent = predecessor;
-        }
+        else
+            node->parent->right = node;
+
+        predecessor->left->parent = predecessor;
+        if (predecessor->right != LEAF)
+            predecessor->right->parent = predecessor;
 
         // Update root if necessary
         if (!predecessor->parent)
@@ -375,19 +371,54 @@ void sm_rbtree_erase(SmRBTree* tree, void* element) {
     if (!node->parent) {
         // Node is root, update the pointer and we're done
         tree->root = (child == LEAF) ? NULL : child;
-        return;
+    } else {
+        // Node is not root, repair the tree
+        if (node == node->parent->left)
+            node->parent->left = child;
+        else
+            node->parent->right = child;
+
+        if (node->color == Black && was_black)
+            repair_after_erase(tree, child, node->parent);
     }
 
-    // Node is not root, repair the tree
-    if (node == node->parent->left)
-        node->parent->left = child;
-    else
-        node->parent->right = child;
-
-    if (node->color == Black && was_black)
-        repair_after_erase(tree, child, node->parent);
-
     free(node);
+}
+
+// Iteration
+void* sm_rbtree_first(SmRBTree const* tree) {
+    if (!tree->root)
+        return NULL;
+
+    Node* first = tree->root;
+    while (first->left != LEAF)
+        first = first->left;
+
+    return first->data + tree->node_padding;
+}
+
+void* sm_rbtree_next(void* element) {
+    if (!element)
+        return NULL;
+
+    Node* node = (Node*) (((uint8_t*) element) + tree->element_size - node_size(tree));
+
+    // If we have a right branch, go down
+    if (node->right != LEAF) {
+        node = node->right;
+        while (node->left != LEAF)
+            node = node->left;
+
+        return node->data + tree->node_padding;
+    }
+
+    // No right branch, backtrack until we find root or left branch
+    while (node->parent && node == node->parent->right)
+        node = node->parent;
+
+    // If we still have a parent, it is our successor; if not, we are back
+    // to root after exploring everything so we should return NULL anyway.
+    return node->parent;
 }
 
 // Lookup
