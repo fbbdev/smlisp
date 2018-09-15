@@ -78,5 +78,6 @@ bool sm_test_report(SmTestContext const* ctx) {
         ctx->argc ? ": " : "",
         ctx->pass, ctx->fail,
         ctx->pass + ctx->fail);
+    fflush(stdout);
     return !ctx->fail;
 }
