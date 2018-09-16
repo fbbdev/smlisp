@@ -17,6 +17,7 @@ ARFLAGS       = crf
 TESTFLAGS     = -fsanitize=address -fsanitize=leak -fsanitize=undefined
 DEBUGFLAGS   := -g -O0 $(TESTFLAGS)
 RELEASEFLAGS  = -DNDEBUG -flto -O3
+DEPFLAGS      = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
 
 ifdef RELEASE
 	CFLAGS  += $(RELEASEFLAGS)
@@ -28,20 +29,24 @@ else
 endif
 
 BUILDDIR   = build
+OBJDIR     = build/objs
+DEPDIR     = build/deps
 TESTDIR    = $(BUILDDIR)/tests
-DIRS       = $(BUILDDIR) $(TESTDIR)
+DIRS       = $(BUILDDIR) $(OBJDIR) $(DEPDIR) $(TESTDIR)
 
 INCLUDEDIR = include
 SRCDIR     = src
 
-OBJS       = $(patsubst %.c,$(BUILDDIR)/%.o,$(filter-out %_test,$(notdir $(wildcard $(SRCDIR)/*.c))))
+OBJS       = $(patsubst %.c,$(OBJDIR)/%.o,$(filter-out %_test.c,$(notdir $(wildcard $(SRCDIR)/*.c))))
 TESTLOG    = $(BUILDDIR)/test.log
 
 $(DIRS):
 	$(MD) $@
 
-$(BUILDDIR)/%.o : $(SRCDIR)/%.c | $(DIRS)
-	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJDIR)/%.o : $(SRCDIR)/%.c
+$(OBJDIR)/%.o : $(SRCDIR)/%.c $(DEPDIR)/%.d | $(DIRS)
+	$(CC) $(DEPFLAGS) $(CFLAGS) -c -o $@ $<
+	@mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d && touch $@
 
 $(BUILDDIR)/libsmlisp.a : $(OBJS) | $(DIRS)
 	$(AR) $(ARFLAGS) $@ $^
@@ -64,3 +69,8 @@ clean_test:
 
 clean:
 	$(RM) $(DIRS)
+
+$(DEPDIR)/%.d: ;
+.PRECIOUS: $(DEPDIR)/%.d
+
+include $(wildcard $(DEPDIR)/*.d)
