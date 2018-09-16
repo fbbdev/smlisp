@@ -56,8 +56,21 @@ typedef struct SmKey {
 } SmKey;
 
 typedef SmKey (*SmKeyFunction)(void const* element);
+typedef intptr_t (*SmKeyComparisonFunction)(SmKey lhs, SmKey rhs);
 
-int sm_key_compare(SmKey lhs, SmKey rhs);
+intptr_t sm_key_compare_data(SmKey lhs, SmKey rhs);
+
+inline intptr_t sm_key_compare_ptr(SmKey lhs, SmKey rhs) {
+    return ((intptr_t) lhs.data) - ((intptr_t) rhs.data);
+}
+
+inline intptr_t sm_key_compare_size(SmKey lhs, SmKey rhs) {
+    return ((intptr_t) lhs.size) - ((intptr_t) rhs.size);
+}
+
+inline SmKey sm_ptr_key(void const* element) {
+    return (SmKey){ *(void const* const*) element, 0 };
+}
 
 // Encapsulate a reference to a string
 typedef struct SmString {

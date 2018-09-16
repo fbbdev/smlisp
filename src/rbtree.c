@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 // Inlines
+extern inline SmRBTree sm_ptr_rbtree();
 extern inline SmRBTree sm_string_rbtree();
 extern inline bool sm_rbtree_empty(SmRBTree const* tree);
 
@@ -252,7 +253,8 @@ static void repair_after_erase(SmRBTree* tree, Node* n, Node* p) {
 }
 
 // Lifetime management
-SmRBTree sm_rbtree(size_t element_size, size_t element_alignment, SmKeyFunction key) {
+SmRBTree sm_rbtree(size_t element_size, size_t element_alignment,
+                   SmKeyFunction key, SmKeyComparisonFunction compare) {
     size_t padding = (element_alignment - sizeof(Node)%element_alignment) % element_alignment;
 
     return (SmRBTree){
@@ -261,7 +263,7 @@ SmRBTree sm_rbtree(size_t element_size, size_t element_alignment, SmKeyFunction 
         // See C99 standard §6.7.2.1.21
         padding + (sizeof(Node) - offsetof(Node, data)),
         sm_common_alignment(element_alignment, sm_alignof(Node)),
-        key,
+        key, compare,
         NULL
     };
 }
@@ -299,18 +301,20 @@ void* sm_rbtree_insert(SmRBTree* tree, void const* element) {
     // Find insertion point
     Node* node = tree->root;
     void* node_element = node->data + tree->node_padding;
-    int cmp = sm_key_compare(key, tree->key(node_element));
+    int cmp = tree->compare(key, tree->key(node_element));
 
     while ((cmp < 0 && node->left != LEAF) || (cmp > 0 && node->right != LEAF)) {
         node = (cmp < 0) ? node->left : node->right;
 
         node_element = node->data + tree->node_padding;
-        cmp = sm_key_compare(key, tree->key(node_element));
+        cmp = tree->compare(key, tree->key(node_element));
     }
 
-    // Element found, return node
-    if (cmp == 0)
+    // Key found, copy element and return node
+    if (cmp == 0) {
+        memcpy(node_element, element, tree->element_size);
         return node_element;
+    }
 
     // Insert new node
     node = node_new(tree, node, element);
@@ -397,7 +401,7 @@ void* sm_rbtree_first(SmRBTree const* tree) {
     return first->data + tree->node_padding;
 }
 
-void* sm_rbtree_next(void* element) {
+void* sm_rbtree_next(SmRBTree const* tree, void* element) {
     if (!element)
         return NULL;
 
@@ -434,7 +438,7 @@ void* sm_rbtree_find_by_key(SmRBTree const* tree, SmKey key) {
 
     while (node != LEAF) {
         void* element = node->data + tree->node_padding;
-        int cmp = sm_key_compare(key, tree->key(element));
+        int cmp = tree->compare(key, tree->key(element));
 
         if (cmp == 0)
             return element;

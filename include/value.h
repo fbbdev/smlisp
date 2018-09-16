@@ -13,8 +13,8 @@ typedef enum SmType {
     SmTypeWord,
     SmTypeReference,  // Unquoted word
 
-    // Lists
-    SmTypeList,
+    // Conses
+    SmTypeCons,
     SmTypeCall,       // Unquoted list
 
     // Count of types
@@ -27,18 +27,18 @@ typedef struct SmValue {
     union {
         SmNumber number;
         SmWord word;
-        struct SmList* list;
+        struct SmCons* cons;
     } data;
 } SmValue;
 
-typedef struct SmList {
+typedef struct SmCons {
     SmValue car;
     SmValue cdr;
-} SmList;
+} SmCons;
 
 // Value functions
 inline SmValue sm_value_nil() {
-    return (SmValue){ SmTypeNil, { .list = NULL } };
+    return (SmValue){ SmTypeNil, { .cons = NULL } };
 }
 
 inline SmValue sm_value_number(SmNumber number) {
@@ -49,8 +49,8 @@ inline SmValue sm_value_word(SmWord word, bool quoted) {
     return (SmValue){ quoted ? SmTypeWord : SmTypeReference, { .word = word } };
 }
 
-inline SmValue sm_value_list(SmList* list, bool quoted) {
-    return (SmValue){ quoted ? SmTypeList : SmTypeCall, { .list = list } };
+inline SmValue sm_value_cons(SmCons* cons, bool quoted) {
+    return (SmValue){ quoted ? SmTypeCons : SmTypeCall, { .cons = cons } };
 }
 
 inline bool sm_value_is_nil(SmValue value) {
@@ -65,8 +65,8 @@ inline bool sm_value_is_word(SmValue value) {
     return value.type == SmTypeWord || value.type == SmTypeReference;
 }
 
-inline bool sm_value_is_list(SmValue value) {
-    return value.type == SmTypeList || value.type == SmTypeCall;
+inline bool sm_value_is_cons(SmValue value) {
+    return value.type == SmTypeCons || value.type == SmTypeCall;
 }
 
 inline bool sm_value_is_unquoted(SmValue value) {

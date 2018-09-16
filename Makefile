@@ -1,15 +1,21 @@
-default: none
+default: lib
 
-.PHONY: test clean
+.PHONY: lib test clean clean_test
+
+CC = gcc
+LD = gcc
+AR = gcc-ar
+MD = mkdir -p
+RM = rm -rf
 
 CSTD          = c99
-CC            = gcc
-LD            = gcc
 CFLAGS        = -std=$(CSTD) -Wall -Wextra -pedantic -Werror -I$(INCLUDEDIR)
 LDFLAGS       =
-CFLAGS_TEST   = -fsanitize=address -fsanitize=leak -fsanitize=undefined
-LDFLAGS_TEST  =
-DEBUGFLAGS    = -g -O0
+LIBS          =
+ARFLAGS       = crf
+
+TESTFLAGS     = -fsanitize=address -fsanitize=leak -fsanitize=undefined
+DEBUGFLAGS   := -g -O0 $(TESTFLAGS)
 RELEASEFLAGS  = -DNDEBUG -flto -O3
 
 ifdef RELEASE
@@ -18,33 +24,43 @@ ifdef RELEASE
 else
 	CFLAGS  += $(DEBUGFLAGS)
 	LDFLAGS += $(DEBUGFLAGS)
+	TESTFLAGS =
 endif
-
-MD=mkdir -p
-RM=rm -rf
 
 BUILDDIR   = build
 TESTDIR    = $(BUILDDIR)/tests
 DIRS       = $(BUILDDIR) $(TESTDIR)
 
-TESTLOG    = $(BUILDDIR)/test.log
-
 INCLUDEDIR = include
 SRCDIR     = src
+
+OBJS       = $(patsubst %.c,$(BUILDDIR)/%.o,$(filter-out %_test,$(notdir $(wildcard $(SRCDIR)/*.c))))
+TESTLOG    = $(BUILDDIR)/test.log
 
 $(DIRS):
 	$(MD) $@
 
-$(TESTDIR)/% : $(SRCDIR)/%_test.c $(SRCDIR)/%.c $(SRCDIR)/util.c | $(DIRS)
-	$(CC) $(CFLAGS) $(CFLAGS_TEST) $(LDFLAGS) -o $@ $^
+$(BUILDDIR)/%.o : $(SRCDIR)/%.c | $(DIRS)
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-test: $(patsubst %_test.c,$(TESTDIR)/%,$(notdir $(wildcard $(SRCDIR)/*_test.c)))
+$(BUILDDIR)/libsmlisp.a : $(OBJS) | $(DIRS)
+	$(AR) $(ARFLAGS) $@ $^
+
+lib: $(BUILDDIR)/libsmlisp.a
+
+$(TESTDIR)/% : $(SRCDIR)/%_test.c $(SRCDIR)/%.c $(SRCDIR)/util.c | $(DIRS)
+	$(CC) $(CFLAGS) $(TESTFLAGS) $(LDFLAGS) -o $@ $^
+
+test: clean_test $(patsubst %_test.c,$(TESTDIR)/%,$(notdir $(wildcard $(SRCDIR)/*_test.c)))
 	@echo Starting test suite
 	@$(RM) $(TESTLOG)
 	@for test in $^; do \
 		echo -ne "Testing $$(basename "$$test")...\r"; \
 		"$$test" 2>&1 | tee $(TESTLOG) | grep "PANIC\|FAIL\|tests passed"; \
 	done
+
+clean_test:
+	$(RM) $(TESTDIR)
 
 clean:
 	$(RM) $(DIRS)

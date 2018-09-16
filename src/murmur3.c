@@ -14,8 +14,10 @@
 
 #if defined(__GNUC__) || defined(__clang__)
 #define FORCE_INLINE __attribute__((always_inline)) inline
+#define FALLTHROUGH __attribute__((fallthrough))
 #else
 #define FORCE_INLINE inline
+#define FALLTHROUGH
 #endif
 
 static FORCE_INLINE uint32_t rotl32 ( uint32_t x, int8_t r )
@@ -49,10 +51,10 @@ static FORCE_INLINE uint32_t fmix32 ( uint32_t h )
 
 //-----------------------------------------------------------------------------
 
-uint32_t sm_hash(const void* data, size_t size, uint32_t seed)
+uint32_t sm_hash(const void* data_, size_t size, uint32_t seed)
 {
-  const uint8_t * data = (const uint8_t*)key;
-  const int nblocks = len / 4;
+  const uint8_t * data = (const uint8_t*)data_;
+  const int nblocks = size / 4;
   int i;
 
   uint32_t h1 = seed;
@@ -85,10 +87,10 @@ uint32_t sm_hash(const void* data, size_t size, uint32_t seed)
 
   uint32_t k1 = 0;
 
-  switch(len & 3)
+  switch(size & 3)
   {
-  case 3: k1 ^= tail[2] << 16;
-  case 2: k1 ^= tail[1] << 8;
+  case 3: k1 ^= tail[2] << 16; FALLTHROUGH;
+  case 2: k1 ^= tail[1] << 8; FALLTHROUGH;
   case 1: k1 ^= tail[0];
           k1 *= c1; k1 = ROTL32(k1,15); k1 *= c2; h1 ^= k1;
   };
@@ -96,7 +98,7 @@ uint32_t sm_hash(const void* data, size_t size, uint32_t seed)
   //----------
   // finalization
 
-  h1 ^= len;
+  h1 ^= size;
 
   h1 = fmix32(h1);
 

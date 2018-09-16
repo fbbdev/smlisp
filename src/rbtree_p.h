@@ -1,3 +1,5 @@
+#pragma once
+
 #include "rbtree.h"
 
 typedef enum Color {

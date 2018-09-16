@@ -106,14 +106,14 @@ bool validate_tree(Node const* node, Node const* parent,
     // Verify key ordering
     SmKey key = tree->key(element);
 
-    if (!is_leaf(node->left) && sm_key_compare(tree->key(node->left->data + tree->node_padding), key) >= 0) {
+    if (!is_leaf(node->left) && tree->compare(tree->key(node->left->data + tree->node_padding), key) >= 0) {
         fprintf(stderr,
             "node: %p - left child (%p) has higher or equal key\n",
             (void*) node, (void*) node->left);
         result = false;
     }
 
-    if (!is_leaf(node->right) && sm_key_compare(tree->key(node->right->data + tree->node_padding), key) <= 0) {
+    if (!is_leaf(node->right) && tree->compare(tree->key(node->right->data + tree->node_padding), key) <= 0) {
         fprintf(stderr,
             "node: %p - right child (%p) has lower or equal key\n",
             (void*) node, (void*) node->right);

@@ -6,8 +6,8 @@
 extern inline SmString sm_word_str(SmWord word);
 
 void sm_word_set_drop(SmWordSet* set) {
-    for (SmString* str = (SmString*)  sm_rbtree_first(set); str; str = (SmString*) sm_rbtree_next(str))
-        free(str->data);
+    for (SmString* str = (SmString*)  sm_rbtree_first(set); str; str = (SmString*) sm_rbtree_next(set, str))
+        free((char*) str->data);
 
     sm_rbtree_drop(set);
 }

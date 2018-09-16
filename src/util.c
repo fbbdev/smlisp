@@ -5,6 +5,9 @@
 #include <string.h>
 
 // Inlines
+extern inline intptr_t sm_key_compare_ptr(SmKey lhs, SmKey rhs);
+extern inline intptr_t sm_key_compare_size(SmKey lhs, SmKey rhs);
+extern inline SmKey sm_ptr_key(void const* element);
 extern inline SmString sm_string_from_cstring(char const* str);
 extern inline SmKey sm_string_key(void const* element);
 extern inline void* sm_aligned_alloc(size_t alignment, size_t size);
@@ -26,7 +29,7 @@ sm_noreturn void sm_handle_panic(char const* fn, char const* file,
 }
 
 // Key functions
-int sm_key_compare(SmKey lhs, SmKey rhs) {
+intptr_t sm_key_compare_data(SmKey lhs, SmKey rhs) {
     uint8_t const* ldata = (uint8_t const*) lhs.data;
     uint8_t const* lend = ldata + lhs.size;
 

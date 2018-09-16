@@ -37,15 +37,14 @@ inline SmNumber sm_number_as_float(SmNumber number) {
 }
 
 inline SmNumber sm_number_as_type(SmNumberType type, SmNumber number) {
-    SmNumber ret = number;
     return (number.type == type) ?
-        number : (SmNumber){ type, (type == SmNumberInt) ? (SmNumberValue){ .i = (int64_t) number.value.f }
-                                                         : (SmNumberValue){ .f = (int64_t) number.value.i }
+        number : (SmNumber){ type, (type == SmNumberTypeInt) ? (SmNumberValue){ .i = (int64_t) number.value.f }
+                                                             : (SmNumberValue){ .f = (int64_t) number.value.i }
     };
 }
 
 inline bool sm_number_is_int(SmNumber number) {
-    return number.type == SmNumberTypeInteger;
+    return number.type == SmNumberTypeInt;
 }
 
 inline bool sm_number_is_float(SmNumber number) {
@@ -53,5 +52,5 @@ inline bool sm_number_is_float(SmNumber number) {
 }
 
 inline SmNumberType sm_number_common_type(SmNumberType t1, SmNumberType t2) {
-    return (t1 == SmNumberTypeFloat || t2 == SmNumberTypeFloat) ? SmNumberTypeFloat : SmNumberTypeInteger;
+    return (t1 == SmNumberTypeFloat || t2 == SmNumberTypeFloat) ? SmNumberTypeFloat : SmNumberTypeInt;
 }
