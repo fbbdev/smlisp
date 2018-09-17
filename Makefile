@@ -9,10 +9,10 @@ MD = mkdir -p
 RM = rm -rf
 
 CSTD          = c99
-CFLAGS        = -std=$(CSTD) -Wall -Wextra -pedantic -Werror -I$(INCLUDEDIR)
+CFLAGS        = -std=$(CSTD) -Wall -Wextra -pedantic -Wno-missing-field-initializers -Werror -I$(INCLUDEDIR)
 LDFLAGS       =
 LIBS          =
-ARFLAGS       = crf
+ARFLAGS       = cr
 
 TESTFLAGS     = -fsanitize=address -fsanitize=leak -fsanitize=undefined
 DEBUGFLAGS   := -g -O0 $(TESTFLAGS)
@@ -61,7 +61,7 @@ test: clean_test $(TESTS)
 	@echo Starting test suite
 	@$(RM) $(TESTLOG)
 	@for test in $^; do \
-		echo -ne "Testing $$(basename "$$test")...\r"; \
+		printf "Testing $$(basename "$$test")...\r"; \
 		"$$test" 2>&1 | tee $(TESTLOG) | grep "PANIC\|FAIL\|tests passed"; \
 	done
 

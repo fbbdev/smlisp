@@ -12,7 +12,7 @@ void sm_register_builtins(SmContext* ctx) {
     #undef REGISTER_BUILTIN
 }
 
-#define sm_return(value) { *ret = (value); return (SmError){ SmErrorOk }; }
+#define sm_return(value) { *ret = (value); return sm_ok; }
 
 SmError SM_BUILTIN_SYMBOL(eval)(SmContext* ctx, SmCons* params, SmValue* ret) {
     sm_unused(ctx); sm_unused(params); sm_unused(ret);

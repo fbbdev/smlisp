@@ -12,9 +12,12 @@
 //-----------------------------------------------------------------------------
 // Platform-specific functions and macros
 
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(__GNUC__) && !defined(__clang__)
     #define FORCE_INLINE __attribute__((always_inline)) inline
     #define FALLTHROUGH __attribute__((fallthrough))
+#elif defined(__clang__)
+    #define FORCE_INLINE __attribute__((always_inline)) inline
+    #define FALLTHROUGH
 #else
     #define FORCE_INLINE inline
     #define FALLTHROUGH
