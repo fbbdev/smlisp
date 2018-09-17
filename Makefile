@@ -38,6 +38,7 @@ INCLUDEDIR = include
 SRCDIR     = src
 
 OBJS       = $(patsubst %.c,$(OBJDIR)/%.o,$(filter-out %_test.c,$(notdir $(wildcard $(SRCDIR)/*.c))))
+TESTS      = $(patsubst %_test.c,$(TESTDIR)/%,$(notdir $(wildcard $(SRCDIR)/*_test.c)))
 TESTLOG    = $(BUILDDIR)/test.log
 
 $(DIRS):
@@ -56,7 +57,7 @@ lib: $(BUILDDIR)/libsmlisp.a
 $(TESTDIR)/% : $(SRCDIR)/%_test.c $(SRCDIR)/%.c $(SRCDIR)/util.c | $(DIRS)
 	$(CC) $(CFLAGS) $(TESTFLAGS) $(LDFLAGS) -o $@ $^
 
-test: clean_test $(patsubst %_test.c,$(TESTDIR)/%,$(notdir $(wildcard $(SRCDIR)/*_test.c)))
+test: clean_test $(TESTS)
 	@echo Starting test suite
 	@$(RM) $(TESTLOG)
 	@for test in $^; do \

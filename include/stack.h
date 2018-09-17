@@ -21,18 +21,13 @@ typedef struct SmStackFrame {
     SmScope scope;
 } SmStackFrame;
 
-// Variable functions
-inline SmKey sm_variable_key(void const* element) {
-    return sm_word_key(&((SmVariable const*) element)->id);
-}
-
 // Scope functions
 #define sm_scope_drop sm_rbtree_drop
 #define sm_scope_size sm_rbtree_size
 
 inline SmScope sm_scope() {
     return sm_rbtree(sizeof(SmVariable), sm_alignof(SmVariable),
-                     sm_variable_key, sm_key_compare_ptr);
+                     sm_word_key, sm_key_compare_ptr);
 }
 
 inline SmVariable* sm_scope_get(SmScope const* scope, SmWord id) {

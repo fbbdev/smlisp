@@ -18,7 +18,7 @@ static inline size_t gcd_size_t(size_t m, size_t n) {
     return (n == 0) ? m : (m % n == 0) ? n : gcd_size_t(n, m % n);
 }
 
-// Error handling
+// SmError handling
 sm_noreturn void sm_handle_panic(char const* fn, char const* file,
                                  unsigned int line, char const* message) {
     fprintf(stderr,

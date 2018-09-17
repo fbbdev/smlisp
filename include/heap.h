@@ -39,4 +39,9 @@ SmCons* sm_heap_alloc_owned(SmHeap* heap, SmStackFrame const* frame);
 void sm_heap_unref(SmHeap* heap, SmStackFrame const* frame, uint8_t count);
 void sm_heap_disown(SmHeap* heap, SmStackFrame const* frame, SmCons* obj);
 
+inline void sm_heap_disown_value(SmHeap* heap, SmStackFrame const* frame, SmValue v) {
+    if (sm_value_is_cons(v))
+        sm_heap_disown(heap, frame, v.data.cons);
+}
+
 void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame);

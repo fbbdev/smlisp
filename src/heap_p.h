@@ -8,4 +8,4 @@ typedef struct SmHeapObject {
     bool owned : 1;
 
     SmCons cons;
-} SmHeapObject;
+} Object;

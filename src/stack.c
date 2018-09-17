@@ -1,7 +1,6 @@
 #include "stack.h"
 
 // Inlines
-extern inline SmKey sm_variable_key(void const* element);
 extern inline SmScope sm_scope();
 extern inline SmVariable* sm_scope_get(SmScope const* scope, SmWord id);
 extern inline void sm_scope_set(SmScope* scope, SmVariable var);

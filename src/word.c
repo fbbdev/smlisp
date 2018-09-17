@@ -1,5 +1,6 @@
 #include "word.h"
 
+#include <ctype.h>
 #include <string.h>
 
 // Inlines
@@ -17,7 +18,12 @@ SmWord sm_word(SmWordSet* set, SmString str) {
 
     if (!word) {
         char* buf = sm_aligned_alloc(sm_alignof(char), str.length*sizeof(char));
+
+        // Copy string and transform to lowercase
         strncpy(buf, str.data, str.length);
+        for (char* p = buf; *p; ++p)
+            *p = tolower(*p);
+
         str.data = buf;
 
         word = (SmWord) sm_rbtree_insert(set, &str);

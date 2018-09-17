@@ -8,6 +8,7 @@
 // Inlines
 extern inline SmHeap sm_heap(SmGCConfig gc);
 extern inline size_t sm_heap_size(SmHeap const* heap);
+extern inline void sm_heap_disown_value(SmHeap* heap, SmStackFrame const* frame, SmValue v);
 
 // Private helpers
 static inline bool should_collect(struct SmGCStatus const* gc) {
@@ -15,10 +16,10 @@ static inline bool should_collect(struct SmGCStatus const* gc) {
            (gc->unref_count >= gc->config.unref_threshold);
 }
 
-static inline SmHeapObject* object_new(SmHeapObject* next) {
-    SmHeapObject* obj = sm_aligned_alloc(sm_alignof(SmHeapObject), sizeof(SmHeapObject));
+static inline Object* object_new(Object* next) {
+    Object* obj = sm_aligned_alloc(sm_alignof(Object), sizeof(Object));
 
-    *obj = (SmHeapObject){
+    *obj = (Object){
         next, false, false,
         { sm_value_nil(), sm_value_nil() }
     };
@@ -26,11 +27,11 @@ static inline SmHeapObject* object_new(SmHeapObject* next) {
     return obj;
 }
 
-static inline SmHeapObject* object_from_cons(SmCons* cons) {
-    return (SmHeapObject*) (((uint8_t*) cons) - offsetof(SmHeapObject, cons));
+static inline Object* object_from_cons(SmCons* cons) {
+    return (Object*) (((uint8_t*) cons) - offsetof(Object, cons));
 }
 
-static void gc_mark(SmHeapObject* obj) {
+static void gc_mark(Object* obj) {
     while (!obj->marked) {
         obj->marked = true;
 
@@ -44,12 +45,12 @@ static void gc_mark(SmHeapObject* obj) {
 
 // Heap functions
 void sm_heap_drop(SmHeap* heap) {
-    for (SmHeapObject *obj = heap->objects, *next; obj; obj = next) {
+    for (Object *obj = heap->objects, *next; obj; obj = next) {
         next = obj->next;
         free(obj);
     }
 
-    for (SmHeapObject *obj = heap->owned, *next; obj; obj = next) {
+    for (Object *obj = heap->owned, *next; obj; obj = next) {
         next = obj->next;
         free(obj);
     }
@@ -65,7 +66,7 @@ SmCons* sm_heap_alloc(SmHeap* heap, SmStackFrame const* frame) {
     if (should_collect(&heap->gc))
         sm_heap_gc(heap, frame);
 
-    SmHeapObject* obj = object_new(heap->objects);
+    Object* obj = object_new(heap->objects);
     heap->objects = obj;
 
     return &obj->cons;
@@ -75,7 +76,7 @@ SmCons* sm_heap_alloc_owned(SmHeap* heap, SmStackFrame const* frame) {
     if (should_collect(&heap->gc))
         sm_heap_gc(heap, frame);
 
-    SmHeapObject* obj = object_new(heap->owned);
+    Object* obj = object_new(heap->owned);
     obj->owned = true;
 
     heap->owned = obj;
@@ -102,7 +103,7 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
     // Mark phase
 
     // Mark owned objects
-    for (SmHeapObject *obj = heap->owned, *next; obj; obj = next) {
+    for (Object *obj = heap->owned, *next; obj; obj = next) {
         next = obj->next;
 
         if (obj->owned) {
@@ -114,7 +115,7 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
         }
     }
 
-    // Unwind stack and mark live objects
+    // Walk stack and mark live objects
     for (; frame; frame = frame->parent) {
         for (SmVariable* var = sm_scope_first(&frame->scope); var; var = sm_scope_next(&frame->scope, var)) {
             if (sm_value_is_cons(var->value) && var->value.data.cons)
@@ -123,10 +124,10 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
     }
 
     // Sweep phase
-    SmHeapObject** objp = &heap->objects;
+    Object** objp = &heap->objects;
 
     while (*objp) {
-        SmHeapObject* obj = *objp;
+        Object* obj = *objp;
 
         if (!obj->marked) {
             *objp = obj->next; // Update list
@@ -139,7 +140,7 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
     }
 
     // Clear marked flag for owned objects
-    for (SmHeapObject* obj = heap->owned; obj; obj = obj->next)
+    for (Object* obj = heap->owned; obj; obj = obj->next)
         obj->marked = false;
 
     // Update gc status
