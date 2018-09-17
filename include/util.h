@@ -13,26 +13,34 @@
     // C11
     #define sm_alignof _Alignof
     #define sm_noreturn _Noreturn
+    #define sm_thread_local _Thread_local
 
 #elif defined(_MSC_VER)
     // MSVC
     #define sm_alignof __alignof
     #define sm_noreturn __declspec(noreturn)
+    #define sm_thread_local __declspec(thread)
 
 #elif defined(__INTEL_COMPILER)
     // Intel C Compiler
     #define sm_alignof __alignof
     #define sm_noreturn __attribute__((noreturn))
+    #define sm_thread_local __thread
 
 #elif defined(__GNUC__) || defined(__clang__)
     // GCC and clang
     #define sm_alignof __alignof__
     #define sm_noreturn __attribute__((noreturn))
+    #define sm_thread_local __thread
 
 #else
     // C99 polyfills
     #define sm_alignof(type) offsetof(struct { char c; type d; }, d)
     #define sm_noreturn
+
+    #ifndef sm_thread_local
+        #error Please define sm_thread_local as an attribute supported by your compiler
+    #endif
 
 #endif
 

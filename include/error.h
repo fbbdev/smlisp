@@ -7,6 +7,7 @@ typedef enum SmErrorCode {
     SmErrorMissingArguments,
     SmErrorExcessArguments,
     SmErrorInvalidArgument,
+    SmErrorUndefinedVariable,
     SmErrorGeneric,
 
     SmErrorCount
