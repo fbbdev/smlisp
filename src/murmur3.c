@@ -13,11 +13,11 @@
 // Platform-specific functions and macros
 
 #if defined(__GNUC__) || defined(__clang__)
-#define FORCE_INLINE __attribute__((always_inline)) inline
-#define FALLTHROUGH __attribute__((fallthrough))
+    #define FORCE_INLINE __attribute__((always_inline)) inline
+    #define FALLTHROUGH __attribute__((fallthrough))
 #else
-#define FORCE_INLINE inline
-#define FALLTHROUGH
+    #define FORCE_INLINE inline
+    #define FALLTHROUGH
 #endif
 
 static FORCE_INLINE uint32_t rotl32 ( uint32_t x, int8_t r )

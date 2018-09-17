@@ -3,7 +3,10 @@
 #include "util.h"
 
 typedef enum SmErrorCode {
-    SmErrorNone = 0,
+    SmErrorOk = 0,
+    SmErrorMissingArguments,
+    SmErrorExcessArguments,
+    SmErrorInvalidArgument,
     SmErrorGeneric,
 
     SmErrorCount
@@ -15,9 +18,18 @@ typedef struct SmError {
     SmString message;
 } SmError;
 
-#define sm_throw(ctx, err, msg, exit_frame) ⁠\
+#define sm_ok ((SmError){ SmErrorOk })
+
+#define sm_error(ctx, err, msg) \
+    ((SmError){ \
+        (err), \
+        ctx->frame->name, \
+        sm_string_from_cstring(msg) \
+    })
+
+#define sm_throw(ctx, err, msg, exit_frame) \
     { \
-        SmError _sm_throw_err = { (err), (ctx)->frame->name, sm_string_from_cstring(msg) }; ⁠\
+        SmError _sm_throw_err = sm_error((ctx), (err), (msg)); \
         if (exit_frame) sm_context_exit_frame(ctx); \
         return _sm_throw_err; \
     }

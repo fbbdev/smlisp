@@ -64,11 +64,11 @@ bool sm_test_report(SmTestContext const* ctx) {
     char const* test_name = "";
 
     if (ctx->argc) {
-#ifdef _WIN32
-        char const pathsep = '\\';
-#else
-        char const pathsep = '/';
-#endif
+        #ifdef _WIN32
+            char const pathsep = '\\';
+        #else
+            char const pathsep = '/';
+        #endif
         if (!(test_name = strrchr(ctx->argv[0], pathsep)))
             test_name = ctx->argv[0];
         else

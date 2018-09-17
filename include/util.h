@@ -10,29 +10,29 @@
 #define sm_unused(value) ((void) (value))
 
 #if (__STDC_VERSION__ >= 201112L)
-// C11
-#define sm_alignof _Alignof
-#define sm_noreturn _Noreturn
+    // C11
+    #define sm_alignof _Alignof
+    #define sm_noreturn _Noreturn
 
 #elif defined(_MSC_VER)
-// MSVC
-#define sm_alignof __alignof
-#define sm_noreturn __declspec(noreturn)
+    // MSVC
+    #define sm_alignof __alignof
+    #define sm_noreturn __declspec(noreturn)
 
 #elif defined(__INTEL_COMPILER)
-// Intel C Compiler
-#define sm_alignof __alignof
-#define sm_noreturn __attribute__((noreturn))
+    // Intel C Compiler
+    #define sm_alignof __alignof
+    #define sm_noreturn __attribute__((noreturn))
 
 #elif defined(__GNUC__) || defined(__clang__)
-// GCC and clang
-#define sm_alignof __alignof__
-#define sm_noreturn __attribute__((noreturn))
+    // GCC and clang
+    #define sm_alignof __alignof__
+    #define sm_noreturn __attribute__((noreturn))
 
 #else
-// C99 polyfills
-#define sm_alignof(type) offsetof(struct { char c; type d; }, d)
-#define sm_noreturn
+    // C99 polyfills
+    #define sm_alignof(type) offsetof(struct { char c; type d; }, d)
+    #define sm_noreturn
 
 #endif
 
@@ -41,9 +41,9 @@
 #define sm_guard(cond, ...) {if (!(cond)) sm_panic(__VA_ARGS__);}
 
 #ifdef NDEBUG
-#define sm_assert(cond)
+    #define sm_assert(cond)
 #else
-#define sm_assert(cond) sm_guard(cond, "assertion failed: " #cond)
+    #define sm_assert(cond) sm_guard(cond, "assertion failed: " #cond)
 #endif
 
 sm_noreturn void sm_handle_panic(char const* fn, char const* file,
@@ -91,12 +91,12 @@ inline SmKey sm_string_key(void const* element) {
 size_t sm_common_alignment(size_t a1, size_t a2);
 
 inline void* sm_aligned_alloc(size_t alignment, size_t size) {
-#if (__STDC_VERSION__ >= 201112L)
-    void* ptr = aligned_alloc(alignment, size);
-#else
-    sm_unused(alignment);
-    void* ptr = malloc(size);
-#endif
+    #if (__STDC_VERSION__ >= 201112L)
+        void* ptr = aligned_alloc(alignment, size);
+    #else
+        sm_unused(alignment);
+        void* ptr = malloc(size);
+    #endif
     sm_guard(ptr != NULL, "allocation failed");
     return ptr;
 }
