@@ -32,12 +32,14 @@ SmValue build_list_v(SmContext* ctx, va_list* args) {
     SmCons* cons = sm_heap_alloc_owned(&ctx->heap, ctx->frame);
     SmValue ret = sm_value_cons(cons); // Save head
 
-    if (op == SmBuildCar)
+    if (op == SmBuildCar) {
         cons->car = va_arg(*args, SmValue);
-    else if (op == SmBuildList)
+    } else if (op == SmBuildList) {
         cons->car = build_list_v(ctx, args);
-    else
+        sm_heap_disown_value(&ctx->heap, ctx->frame, cons->car);
+    } else {
         sm_panic("invalid operation in sm_build_list arguments");
+    }
 
     for (op = va_arg(*args, SmBuildOp); op != SmBuildCdr && op != SmBuildEnd; op = va_arg(*args, SmBuildOp))
     {
@@ -45,12 +47,14 @@ SmValue build_list_v(SmContext* ctx, va_list* args) {
         cons->cdr = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
         cons = cons->cdr.data.cons;
 
-        if (op == SmBuildCar)
+        if (op == SmBuildCar) {
             cons->car = va_arg(*args, SmValue);
-        else if (op == SmBuildList)
+        } else if (op == SmBuildList) {
             cons->car = build_list_v(ctx, args);
-        else
+            sm_heap_disown_value(&ctx->heap, ctx->frame, cons->car);
+        } else {
             sm_panic("invalid operation in sm_build_list arguments");
+        }
     }
 
     cons->cdr = (op == SmBuildCdr) ? va_arg(*args, SmValue) : sm_value_nil();
