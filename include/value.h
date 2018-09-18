@@ -6,15 +6,25 @@
 
 #include <stdbool.h>
 
+struct SmContext;
+
 typedef enum SmType {
     SmTypeNil = 0,
     SmTypeNumber,
     SmTypeWord,
     SmTypeCons,
 
-    // Count of types
     SmTypeCount
 } SmType;
+
+typedef enum SmBuildOp {
+    SmBuildEnd = 0,
+    SmBuildCar,
+    SmBuildCdr,
+    SmBuildList,
+
+    SmBuildOpCount
+} SmBuildOp;
 
 typedef struct SmValue {
     SmType type;
@@ -31,12 +41,6 @@ typedef struct SmCons {
     SmValue car;
     SmValue cdr;
 } SmCons;
-
-// Cons functions
-inline SmCons* sm_cons_next(SmCons* cons) {
-    return (cons && cons->cdr.type == SmTypeCons && cons->cdr.quotes == 0) ?
-        cons->cdr.data.cons : NULL;
-}
 
 // Value functions
 inline SmValue sm_value_nil() {
@@ -71,10 +75,6 @@ inline bool sm_value_is_cons(SmValue value) {
     return value.type == SmTypeCons;
 }
 
-inline bool sm_value_is_list(SmValue value) {
-    return value.type == SmTypeCons || value.type == SmTypeNil;
-}
-
 inline bool sm_value_is_unquoted(SmValue value) {
     return value.quotes == 0;
 }
@@ -93,3 +93,15 @@ inline SmValue sm_value_unquote(SmValue value, uint8_t unquotes) {
     value.quotes -= (unquotes < value.quotes) ? unquotes : value.quotes;
     return value;
 }
+
+// List functions
+inline bool sm_value_is_list(SmValue value) {
+    return value.type == SmTypeCons || value.type == SmTypeNil;
+}
+
+inline SmCons* sm_list_next(SmCons* cons) {
+    return (cons && cons->cdr.type == SmTypeCons && cons->cdr.quotes == 0) ?
+        cons->cdr.data.cons : NULL;
+}
+
+SmValue sm_build_list(struct SmContext* ctx, ...);

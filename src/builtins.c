@@ -38,14 +38,14 @@ SmError SM_BUILTIN_SYMBOL(lambda)(SmContext* ctx, SmCons* params, SmValue* ret) 
     } else if (!sm_value_is_list(params->cdr) || sm_value_is_quoted(params->cdr)) {
         sm_throw(ctx, SmErrorInvalidArgument, "lambda code is a dotted list", false);
     } else {
-        for (SmCons* arg = params->car.data.cons; arg; arg = sm_cons_next(arg)) {
+        for (SmCons* arg = params->car.data.cons; arg; arg = sm_list_next(arg)) {
             if (!sm_value_is_word(arg->car) || sm_value_is_quoted(arg->car))
                 sm_throw(ctx, SmErrorInvalidArgument, "lambda argument lists may only contain unquoted words", false);
             if (!sm_value_is_list(arg->cdr) || sm_value_is_quoted(arg->cdr))
                 sm_throw(ctx, SmErrorInvalidArgument, "lambda argument list is a dotted list", false);
         }
 
-        for (SmCons* code = params->cdr.data.cons; code; code = sm_cons_next(code)) {
+        for (SmCons* code = params->cdr.data.cons; code; code = sm_list_next(code)) {
             if (!sm_value_is_list(code->cdr) || sm_value_is_quoted(code->cdr))
                 sm_throw(ctx, SmErrorInvalidArgument, "lambda code is a dotted list", false);
         }
@@ -61,7 +61,7 @@ SmError SM_BUILTIN_SYMBOL(lambda)(SmContext* ctx, SmCons* params, SmValue* ret) 
 SmError SM_BUILTIN_SYMBOL(quote)(SmContext* ctx, SmCons* params, SmValue* ret) {
     if (!params) {
         sm_throw(ctx, SmErrorMissingArguments, "quote requires exactly 1 parameter", false);
-    } else if (sm_cons_next(params)) {
+    } else if (sm_list_next(params)) {
         sm_throw(ctx, SmErrorExcessArguments, "quote requires exactly 1 parameter", false);
     } else if (!sm_value_is_nil(params->cdr)) {
         sm_throw(ctx, SmErrorInvalidArgument, "quote cannot accept a dotted parameter list", false);
