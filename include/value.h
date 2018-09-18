@@ -56,6 +56,7 @@ inline SmValue sm_value_word(SmWord word) {
 }
 
 inline SmValue sm_value_cons(SmCons* cons) {
+    sm_assert(cons != NULL);
     return (SmValue){ SmTypeCons, 0, { .cons = cons } };
 }
 
