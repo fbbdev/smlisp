@@ -91,12 +91,16 @@ void sm_heap_unref(SmHeap* heap, SmStackFrame const* frame, uint8_t count) {
         sm_heap_gc(heap, frame);
 }
 
-void sm_heap_disown(SmHeap* heap, SmStackFrame const* frame, SmCons* obj) {
-    object_from_cons(obj)->owned = false;
-    ++heap->gc.unref_count;
+void sm_heap_disown(SmHeap* heap, SmStackFrame const* frame, SmCons* cons) {
+    Object* obj = object_from_cons(cons);
 
-    if (should_collect(&heap->gc))
-        sm_heap_gc(heap, frame);
+    if (obj->owned) {
+        obj->owned = false;
+        ++heap->gc.unref_count;
+
+        if (should_collect(&heap->gc))
+            sm_heap_gc(heap, frame);
+    }
 }
 
 void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
