@@ -9,7 +9,6 @@ void sm_register_builtins(SmContext* ctx);
 #define SM_BUILTIN_SYMBOL(id) sm_builtin_##id
 
 #define SM_BUILTIN_TABLE(builtin, builtin_op) \
-    builtin(eval) \
     builtin(print) \
 \
     builtin(cons) \

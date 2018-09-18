@@ -14,11 +14,6 @@ void sm_register_builtins(SmContext* ctx) {
 
 #define sm_return(value) { *ret = (value); return sm_ok; }
 
-SmError SM_BUILTIN_SYMBOL(eval)(SmContext* ctx, SmCons* params, SmValue* ret) {
-    sm_unused(ctx); sm_unused(params); sm_unused(ret);
-    sm_return(sm_value_nil());
-}
-
 SmError SM_BUILTIN_SYMBOL(print)(SmContext* ctx, SmCons* params, SmValue* ret) {
     sm_unused(ctx); sm_unused(params); sm_unused(ret);
     sm_return(sm_value_nil());
