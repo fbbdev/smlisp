@@ -9,7 +9,7 @@ MD = mkdir -p
 RM = rm -rf
 
 CSTD          = c99
-CFLAGS        = -std=$(CSTD) -Wall -Wextra -pedantic -Wno-missing-field-initializers -Werror -I$(INCLUDEDIR)
+CFLAGS        = -std=$(CSTD) -Wall -Wextra -pedantic -Werror -I$(INCLUDEDIR)
 LDFLAGS       =
 LIBS          =
 ARFLAGS       = cr

@@ -19,7 +19,7 @@ typedef struct SmError {
     SmString message;
 } SmError;
 
-#define sm_ok ((SmError){ SmErrorOk })
+#define sm_ok ((SmError){ SmErrorOk, { NULL, 0 }, { NULL, 0 } })
 
 #define sm_error(ctx, err, msg) \
     ((SmError){ \
