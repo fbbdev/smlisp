@@ -33,16 +33,16 @@ SmError SM_BUILTIN_SYMBOL(cons)(SmContext* ctx, SmCons* params, SmValue* ret) {
 SmError SM_BUILTIN_SYMBOL(lambda)(SmContext* ctx, SmCons* params, SmValue* ret) {
     if (!params) {
         sm_throw(ctx, SmErrorMissingArguments, "lambda requires at least 1 parameter", false);
-    } else if (!sm_value_is_list(params->car) || sm_value_is_quoted(params->car)) {
-        sm_throw(ctx, SmErrorInvalidArgument, "lambda requires an unquoted argument list as first parameter", false);
+    } else if ((!sm_value_is_list(params->car) && !sm_value_is_word(params->car)) || sm_value_is_quoted(params->car)) {
+        sm_throw(ctx, SmErrorInvalidArgument, "lambda requires an unquoted argument list or word as first parameter", false);
     } else if (!sm_value_is_list(params->cdr) || sm_value_is_quoted(params->cdr)) {
         sm_throw(ctx, SmErrorInvalidArgument, "lambda code is a dotted list", false);
     } else {
         for (SmCons* arg = params->car.data.cons; arg; arg = sm_list_next(arg)) {
             if (!sm_value_is_word(arg->car) || sm_value_is_quoted(arg->car))
                 sm_throw(ctx, SmErrorInvalidArgument, "lambda argument lists may only contain unquoted words", false);
-            if (!sm_value_is_list(arg->cdr) || sm_value_is_quoted(arg->cdr))
-                sm_throw(ctx, SmErrorInvalidArgument, "lambda argument list is a dotted list", false);
+            if ((!sm_value_is_list(arg->cdr) && !sm_value_is_word(arg->cdr)) || sm_value_is_quoted(arg->cdr))
+                sm_throw(ctx, SmErrorInvalidArgument, "lambda argument lists may only contain unquoted words", false);
         }
 
         for (SmCons* code = params->cdr.data.cons; code; code = sm_list_next(code)) {
