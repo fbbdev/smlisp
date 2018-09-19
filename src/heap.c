@@ -107,20 +107,27 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
     // Mark phase
 
     // Mark owned objects
-    for (Object *obj = heap->owned, *next; obj; obj = next) {
-        next = obj->next;
+    Object** objp = &heap->owned;
+
+    while (*objp) {
+        Object* obj = *objp;
 
         if (obj->owned) {
             gc_mark(obj);
+            objp = &obj->next;
         } else {
             // Disowned, move to normal objects
-            obj->next = heap->objects;
+            *objp = obj->next; // Delete from owned objects
+            obj->next = heap->objects; // Move to normal objects
             heap->objects = obj;
         }
     }
 
     // Walk stack and mark live objects
     for (; frame; frame = frame->parent) {
+        if (sm_value_is_cons(frame->fn) && frame->fn.data.cons)
+            gc_mark(object_from_cons(frame->fn.data.cons));
+
         for (SmVariable* var = sm_scope_first(&frame->scope); var; var = sm_scope_next(&frame->scope, var)) {
             if (sm_value_is_cons(var->value) && var->value.data.cons)
                 gc_mark(object_from_cons(var->value.data.cons));
@@ -128,7 +135,7 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
     }
 
     // Sweep phase
-    Object** objp = &heap->objects;
+    objp = &heap->objects;
 
     while (*objp) {
         Object* obj = *objp;

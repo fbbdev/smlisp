@@ -45,7 +45,7 @@ SmValue build_list_v(SmContext* ctx, va_list* args) {
     {
         // Continue list
         cons->cdr = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
-        cons = cons->cdr.data.cons;
+        cons = sm_list_next(cons);
 
         if (op == SmBuildCar) {
             cons->car = va_arg(*args, SmValue);
