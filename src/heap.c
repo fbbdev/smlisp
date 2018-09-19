@@ -8,7 +8,6 @@
 // Inlines
 extern inline SmHeap sm_heap(SmGCConfig gc);
 extern inline size_t sm_heap_size(SmHeap const* heap);
-extern inline void sm_heap_disown_value(SmHeap* heap, SmStackFrame const* frame, SmValue v);
 
 // Private helpers
 static inline bool should_collect(struct SmGCStatus const* gc) {
@@ -19,16 +18,17 @@ static inline bool should_collect(struct SmGCStatus const* gc) {
 static inline Object* object_new(Object* next) {
     Object* obj = sm_aligned_alloc(sm_alignof(Object), sizeof(Object));
 
-    *obj = (Object){
-        next, false, false,
-        { sm_value_nil(), sm_value_nil() }
-    };
+    *obj = (Object){ next, false, { sm_value_nil(), sm_value_nil() } };
 
     return obj;
 }
 
 static inline Object* object_from_cons(SmCons* cons) {
     return (Object*) (((uint8_t*) cons) - offsetof(Object, cons));
+}
+
+static inline Root* root_from_value(SmValue* value) {
+    return (Root*) (((uint8_t*) value) - offsetof(Root, value));
 }
 
 static void gc_mark(Object* obj) {
@@ -50,12 +50,13 @@ void sm_heap_drop(SmHeap* heap) {
         free(obj);
     }
 
-    for (Object *obj = heap->owned, *next; obj; obj = next) {
-        next = obj->next;
-        free(obj);
+    for (Root *r = heap->roots, *next; r; r = next) {
+        next = r->next;
+        free(r);
     }
 
-    heap->objects = heap->owned = NULL;
+    heap->objects = NULL;
+    heap->roots = NULL;
 
     // Reset gc status
     heap->gc.object_count = heap->gc.unref_count = 0;
@@ -72,16 +73,31 @@ SmCons* sm_heap_alloc(SmHeap* heap, SmStackFrame const* frame) {
     return &obj->cons;
 }
 
-SmCons* sm_heap_alloc_owned(SmHeap* heap, SmStackFrame const* frame) {
-    if (should_collect(&heap->gc))
-        sm_heap_gc(heap, frame);
+SmValue* sm_heap_root(SmHeap* heap) {
+    Root* r = sm_aligned_alloc(sm_alignof(Root), sizeof(Root));
 
-    Object* obj = object_new(heap->owned);
-    obj->owned = true;
+    *r = (Root){ heap->roots, NULL, sm_value_nil() };
 
-    heap->owned = obj;
+    if (heap->roots)
+        heap->roots->prev = r;
 
-    return &obj->cons;
+    heap->roots = r;
+
+    return &r->value;
+}
+
+void sm_heap_root_drop(SmHeap* heap, SmValue* root) {
+    Root* r = root_from_value(root);
+
+    if (r->prev)
+        r->prev->next = r->next;
+    else
+        heap->roots = r->next;
+
+    if (r->next)
+        r->next->prev = r->prev;
+
+    free(r);
 }
 
 void sm_heap_unref(SmHeap* heap, SmStackFrame const* frame, uint8_t count) {
@@ -91,36 +107,13 @@ void sm_heap_unref(SmHeap* heap, SmStackFrame const* frame, uint8_t count) {
         sm_heap_gc(heap, frame);
 }
 
-void sm_heap_disown(SmHeap* heap, SmStackFrame const* frame, SmCons* cons) {
-    Object* obj = object_from_cons(cons);
-
-    if (obj->owned) {
-        obj->owned = false;
-        ++heap->gc.unref_count;
-
-        if (should_collect(&heap->gc))
-            sm_heap_gc(heap, frame);
-    }
-}
-
 void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
     // Mark phase
 
-    // Mark owned objects
-    Object** objp = &heap->owned;
-
-    while (*objp) {
-        Object* obj = *objp;
-
-        if (obj->owned) {
-            gc_mark(obj);
-            objp = &obj->next;
-        } else {
-            // Disowned, move to normal objects
-            *objp = obj->next; // Delete from owned objects
-            obj->next = heap->objects; // Move to normal objects
-            heap->objects = obj;
-        }
+    // Mark roots
+    for (Root* r = heap->roots; r; r = r->next) {
+        if (sm_value_is_cons(r->value) && r->value.data.cons)
+            gc_mark(object_from_cons(r->value.data.cons));
     }
 
     // Walk stack and mark live objects
@@ -135,7 +128,7 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
     }
 
     // Sweep phase
-    objp = &heap->objects;
+    Object** objp = &heap->objects;
 
     while (*objp) {
         Object* obj = *objp;
@@ -149,10 +142,6 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
             objp = &obj->next;
         }
     }
-
-    // Clear marked flag for owned objects
-    for (Object* obj = heap->owned; obj; obj = obj->next)
-        obj->marked = false;
 
     // Update gc status
     if (heap->gc.object_count >= heap->gc.object_threshold)

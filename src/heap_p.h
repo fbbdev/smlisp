@@ -5,7 +5,12 @@
 typedef struct SmHeapObject {
     struct SmHeapObject* next;
     bool marked : 1;
-    bool owned : 1;
 
     SmCons cons;
 } Object;
+
+typedef struct SmHeapRoot {
+    struct SmHeapRoot* next;
+    struct SmHeapRoot* prev;
+    SmValue value;
+} Root;

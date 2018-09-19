@@ -105,4 +105,4 @@ inline SmCons* sm_list_next(SmCons* cons) {
         cons->cdr.data.cons : NULL;
 }
 
-SmValue sm_build_list(struct SmContext* ctx, ...);
+void sm_build_list(struct SmContext* ctx, SmValue* ret, ...);
