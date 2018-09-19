@@ -2,14 +2,14 @@
 #include "context_p.h"
 
 // Inlines
-extern inline void sm_context_enter_frame(SmContext* ctx, SmStackFrame* frame, SmString name);
+extern inline void sm_context_enter_frame(SmContext* ctx, SmStackFrame* frame, SmString name, SmValue fn);
 extern inline void sm_context_exit_frame(SmContext* ctx);
 
 void sm_context_init(SmContext* ctx, SmGCConfig gc) {
     *ctx = (SmContext){
         sm_word_set(),
         sm_rbtree(sizeof(External), sm_alignof(External), sm_word_key, sm_key_compare_ptr),
-        sm_stack_frame(NULL, sm_string_from_cstring("<main>")),
+        sm_stack_frame(NULL, sm_string_from_cstring("<main>"), sm_value_nil()),
         &ctx->main,
         sm_heap(gc)
     };

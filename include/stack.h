@@ -16,7 +16,9 @@ typedef struct SmVariable {
 
 typedef struct SmStackFrame {
     struct SmStackFrame* parent;
+
     SmString name;
+    SmValue fn;
 
     SmScope scope;
 } SmStackFrame;
@@ -55,10 +57,11 @@ inline SmVariable* sm_scope_next(SmScope const* scope, SmVariable* var) {
 }
 
 // Frame functions
-inline SmStackFrame sm_stack_frame(SmStackFrame* parent, SmString name) {
+inline SmStackFrame sm_stack_frame(SmStackFrame* parent, SmString name, SmValue fn) {
     return (SmStackFrame){
         parent,
         name,
+        fn,
         sm_scope()
     };
 }

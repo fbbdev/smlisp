@@ -25,8 +25,8 @@ typedef SmError (*SmExternalVariable)(SmContext* ctx, SmValue* ret);
 void sm_context_init(SmContext* ctx, SmGCConfig gc);
 void sm_context_drop(SmContext* ctx);
 
-inline void sm_context_enter_frame(SmContext* ctx, SmStackFrame* frame, SmString name) {
-    *frame = sm_stack_frame(ctx->frame, name);
+inline void sm_context_enter_frame(SmContext* ctx, SmStackFrame* frame, SmString name, SmValue fn) {
+    *frame = sm_stack_frame(ctx->frame, name, fn);
     ctx->frame = frame;
 }
 
