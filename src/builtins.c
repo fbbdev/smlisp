@@ -15,6 +15,23 @@ void sm_register_builtins(SmContext* ctx) {
 
 #define sm_return(value) { *ret = (value); return sm_ok; }
 
+SmError SM_BUILTIN_SYMBOL(eval)(SmContext* ctx, SmCons* params, SmValue* ret) {
+    if (!params)
+        return sm_error(ctx, SmErrorMissingArguments, "eval requires exactly 1 parameter");
+    else if (!sm_value_is_list(params->cdr))
+        return sm_error(ctx, SmErrorInvalidArgument, "eval cannot accept a dotted parameter list");
+    else if (!sm_value_is_nil(params->cdr))
+        return sm_error(ctx, SmErrorExcessArguments, "eval requires exactly 1 parameter");
+
+    SmValue* form = sm_heap_root(&ctx->heap);
+    SmError err = sm_eval(ctx, params->car, form);
+    if (err.code == SmErrorOk)
+        err = sm_eval(ctx, *form, ret);
+
+    sm_heap_root_drop(&ctx->heap, form);
+    return err;
+}
+
 SmError SM_BUILTIN_SYMBOL(print)(SmContext* ctx, SmCons* params, SmValue* ret) {
     sm_unused(ctx); sm_unused(params);
     sm_return(sm_value_nil());
@@ -41,13 +58,12 @@ SmError SM_BUILTIN_SYMBOL(lambda)(SmContext* ctx, SmCons* params, SmValue* ret) 
 }
 
 SmError SM_BUILTIN_SYMBOL(quote)(SmContext* ctx, SmCons* params, SmValue* ret) {
-    if (!params) {
-        sm_throw(ctx, SmErrorMissingArguments, "quote requires exactly 1 parameter", false);
-    } else if (sm_list_next(params)) {
-        sm_throw(ctx, SmErrorExcessArguments, "quote requires exactly 1 parameter", false);
-    } else if (!sm_value_is_nil(params->cdr)) {
-        sm_throw(ctx, SmErrorInvalidArgument, "quote cannot accept a dotted parameter list", false);
-    }
+    if (!params)
+        return sm_error(ctx, SmErrorMissingArguments, "quote requires exactly 1 parameter");
+    else if (sm_list_next(params))
+        return sm_error(ctx, SmErrorExcessArguments, "quote requires exactly 1 parameter");
+    else if (!sm_value_is_nil(params->cdr))
+        return sm_error(ctx, SmErrorInvalidArgument, "quote cannot accept a dotted parameter list");
 
     sm_return(sm_value_quote(params->car, 1));
 }

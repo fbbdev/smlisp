@@ -27,10 +27,3 @@ typedef struct SmError {
         ctx->frame->name, \
         sm_string_from_cstring(msg) \
     })
-
-#define sm_throw(ctx, err, msg, exit_frame) \
-    { \
-        SmError _sm_throw_err = sm_error((ctx), (err), (msg)); \
-        if (exit_frame) sm_context_exit_frame(ctx); \
-        return _sm_throw_err; \
-    }
