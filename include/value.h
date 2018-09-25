@@ -114,4 +114,12 @@ inline size_t sm_list_size(SmCons* cons) {
     return size;
 }
 
+inline bool sm_list_is_dotted(SmCons* cons) {
+    for (; cons; cons = sm_list_next(cons))
+        if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
+            return true;
+
+    return false;
+}
+
 void sm_build_list(struct SmContext* ctx, SmValue* ret, ...);

@@ -21,6 +21,7 @@ extern inline SmValue sm_value_unquote(SmValue value, uint8_t unquotes);
 extern inline bool sm_value_is_list(SmValue value);
 extern inline SmCons* sm_list_next(SmCons* cons);
 extern inline size_t sm_list_size(SmCons* cons);
+extern inline bool sm_list_is_dotted(SmCons* cons);
 
 void build_list_v(SmContext* ctx, SmValue* ret, va_list* args) {
     SmBuildOp op = va_arg(*args, SmBuildOp);
