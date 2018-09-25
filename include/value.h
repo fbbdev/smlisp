@@ -105,4 +105,13 @@ inline SmCons* sm_list_next(SmCons* cons) {
         cons->cdr.data.cons : NULL;
 }
 
+inline size_t sm_list_size(SmCons* cons) {
+    size_t size = 0;
+
+    for (; cons; cons = sm_list_next(cons))
+        ++size;
+
+    return size;
+}
+
 void sm_build_list(struct SmContext* ctx, SmValue* ret, ...);
