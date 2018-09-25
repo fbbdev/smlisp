@@ -105,6 +105,19 @@ inline SmCons* sm_list_next(SmCons* cons) {
         cons->cdr.data.cons : NULL;
 }
 
+inline SmValue sm_list_dot(SmCons* cons) {
+    for (; cons; cons = sm_list_next(cons))
+        if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
+            return cons->cdr;
+
+    return sm_value_nil();
+}
+
+inline bool sm_list_is_dotted(SmCons* cons) {
+    SmValue dot = sm_list_dot(cons);
+    return !sm_value_is_nil(dot) || sm_value_is_quoted(dot);
+}
+
 inline size_t sm_list_size(SmCons* cons) {
     size_t size = 0;
 
@@ -112,14 +125,6 @@ inline size_t sm_list_size(SmCons* cons) {
         ++size;
 
     return size;
-}
-
-inline bool sm_list_is_dotted(SmCons* cons) {
-    for (; cons; cons = sm_list_next(cons))
-        if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
-            return true;
-
-    return false;
 }
 
 void sm_build_list(struct SmContext* ctx, SmValue* ret, ...);
