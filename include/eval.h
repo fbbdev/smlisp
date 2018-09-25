@@ -6,5 +6,5 @@
 
 SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret);
 
-SmError sm_validate_lambda(SmContext* ctx, SmCons* params);
-SmError sm_invoke_lambda(SmContext* ctx, SmCons* lambda, SmCons* params, SmValue* ret);
+SmError sm_validate_lambda(SmContext* ctx, SmValue params);
+SmError sm_invoke_lambda(SmContext* ctx, SmCons* lambda, SmValue params, SmValue* ret);
