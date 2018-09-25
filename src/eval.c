@@ -1,10 +1,13 @@
+#include "args.h"
 #include "eval.h"
 
 #include <stdio.h>
 #include <string.h>
 
+// Error message buffer
 static sm_thread_local char err_buf[1024];
 
+// Private helpers
 static SmVariable* scope_lookup(SmStackFrame const* frame, SmWord id) {
     for (; frame; frame = frame->parent) {
         SmVariable* var = sm_scope_get(&frame->scope, id);
@@ -15,6 +18,7 @@ static SmVariable* scope_lookup(SmStackFrame const* frame, SmWord id) {
     return NULL;
 }
 
+// Eval functions
 SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     // If quoted, just unquote
     if (sm_value_is_quoted(form)) {
@@ -42,7 +46,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
             // Return lambda wrapping the external function
             sm_build_list(ctx, ret,
                 SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
-                SmBuildCar, sm_value_quote(sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("args"))), 1),
+                SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("args"))),
                 SmBuildList,
                     SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("eval"))),
                     SmBuildList,
@@ -91,147 +95,64 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
         // Call without evaluating arguments
         return ext_fn(ctx, call->cdr, ret);
 
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, fn_name, sm_value_nil());
+    SmValue* fn = sm_heap_root(&ctx->heap);
 
     // Lookup function as external variable
     SmExternalVariable ext_var = sm_context_lookup_variable(ctx, call->car.data.word);
     if (ext_var) {
-        SmError err = ext_var(ctx, &frame.fn);
-        if (err.code != SmErrorOk) {
-            sm_context_exit_frame(ctx);
+        SmError err = ext_var(ctx, fn);
+        if (err.code != SmErrorOk)
             return err;
-        }
     } else {
         // Lookup function as variable in scope
         SmVariable* scope_var = scope_lookup(ctx->frame, form.data.word);
         if (!scope_var) {
             snprintf(err_buf, sizeof(err_buf), "function not found: %.*s", (int) fn_name.length, fn_name.data);
-            sm_context_exit_frame(ctx);
             return sm_error(ctx, SmErrorUndefinedVariable, err_buf);
         }
 
-        frame.fn = scope_var->value;
+        *fn = scope_var->value;
     }
 
-    if (!sm_value_is_cons(frame.fn) || sm_value_is_quoted(frame.fn) ||
-        !sm_value_is_word(frame.fn.data.cons->car) || sm_value_is_quoted(frame.fn.data.cons->car) ||
-        sm_word_str(frame.fn.data.cons->car.data.word).length != 6 ||
-        strncmp(sm_word_str(frame.fn.data.cons->car.data.word).data, "lambda", 6) != 0)
+    if (!sm_value_is_cons(*fn) || sm_value_is_quoted(*fn) ||
+        !sm_value_is_word(fn->data.cons->car) || sm_value_is_quoted(fn->data.cons->car) ||
+        sm_word_str(fn->data.cons->car.data.word).length != 6 ||
+        strncmp(sm_word_str(fn->data.cons->car.data.word).data, "lambda", 6) != 0)
     {
         snprintf(err_buf, sizeof(err_buf), "%.*s is not a function", (int) fn_name.length, fn_name.data);
-        sm_context_exit_frame(ctx);
         return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
 
-    SmError err = sm_validate_lambda(ctx, frame.fn.data.cons->cdr);
+    SmError err = sm_validate_lambda(ctx, fn->data.cons->cdr);
     if (err.code != SmErrorOk) {
         snprintf(err_buf, sizeof(err_buf), "%.*s is not a function: %.*s",
                  (int) fn_name.length, fn_name.data, (int) err.message.length, err.message.data);
-        sm_context_exit_frame(ctx);
         return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
 
     // Call lambda function
-    err = sm_invoke_lambda(ctx, sm_list_next(frame.fn.data.cons), call->cdr, ret);
+    SmStackFrame frame;
+    sm_context_enter_frame(ctx, &frame, fn_name, *fn);
+    sm_heap_root_drop(&ctx->heap, fn);
+
+    err = sm_invoke_lambda(ctx, sm_list_next(fn->data.cons), call->cdr, ret);
     sm_context_exit_frame(ctx);
 
     return err;
 }
 
+// Lambda expression handling
 SmError sm_validate_lambda(SmContext* ctx, SmValue args) {
     if (sm_value_is_nil(args)) {
         return sm_error(ctx, SmErrorMissingArguments, "lambda requires at least 1 argument");
-    } else if (!sm_value_is_cons(args)) {
+    } else if (!sm_value_is_cons(args) || sm_list_is_dotted(args.data.cons)) {
         return sm_error(ctx, SmErrorInvalidArgument, "lambda cannot accept a dotted argument list");
-    } else if (!sm_value_is_word(args.data.cons->car) && (!sm_value_is_list(args.data.cons->car) || sm_value_is_quoted(args.data.cons->car))) {
-        return sm_error(ctx, SmErrorInvalidArgument, "lambda requires a word or an unquoted argument pattern as first argument");
-    } else if (sm_value_is_list(args.data.cons->car)) {
-        for (SmCons* arg = args.data.cons->car.data.cons; arg; arg = sm_list_next(arg)) {
-            if (!sm_value_is_word(arg->car)
-                    || (!sm_value_is_word(arg->cdr)
-                        && (!sm_value_is_list(arg->cdr) || sm_value_is_quoted(arg->cdr))))
-            {
-                return sm_error(ctx, SmErrorInvalidArgument, "lambda argument patterns may only contain words");
-            }
-        }
     }
 
-    for (SmCons* code = args.data.cons; code; code = sm_list_next(code)) {
-        if (!sm_value_is_list(code->cdr) || sm_value_is_quoted(code->cdr))
-            return sm_error(ctx, SmErrorInvalidArgument, "lambda code is a dotted list");
-    }
-
-    return sm_ok;
-}
-
-static SmError eval_param_list(SmContext* ctx, SmValue* ret, SmValue av) {
-    SmValue* root = NULL;
-    SmCons* args = NULL;
-
-    if (sm_value_is_cons(av)) {
-        args = av.data.cons;
-    } else {
-        SmError err = sm_eval(ctx, av, ret);
-        if (err.code != SmErrorOk)
-            return err;
-
-        if (sm_value_is_cons(*ret)) {
-            root = sm_heap_root(&ctx->heap);
-            *root = *ret;
-            args = root->data.cons;
-        } else {
-            return sm_ok;
-        }
-    }
-
-    *ret = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
-    SmCons* param = ret->data.cons;
-
-    SmError err = sm_eval(ctx, args->car, &param->car);
-
-    if (err.code == SmErrorOk && !sm_value_is_list(args->cdr))
-        err = sm_eval(ctx, args->cdr, &param->cdr);
-
-    for (args = sm_list_next(args); args && err.code == SmErrorOk; args = sm_list_next(args)) {
-        param->cdr = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
-        param = sm_list_next(param);
-
-        err = sm_eval(ctx, args->car, &param->car);
-
-        if (err.code == SmErrorOk && !sm_value_is_list(args->cdr))
-            err = sm_eval(ctx, args->cdr, &param->cdr);
-    }
-
-    if (err.code != SmErrorOk)
-        *ret = sm_value_nil();
-
-    if (root)
-        sm_heap_root_drop(&ctx->heap, root);
-
-    return err;
+    return sm_arg_pattern_validate_spec(ctx, args.data.cons->car);
 }
 
 SmError sm_invoke_lambda(SmContext* ctx, SmCons* lambda, SmValue args, SmValue* ret) {
-    if (sm_value_is_word(lambda->car)) {
-        // If argument list is a single word, pass down everything as rest
-
-        if (sm_value_is_quoted(lambda->car)) {
-            // If the word is quoted, do not evaluate args
-            sm_scope_set(&ctx->frame->scope, (SmVariable){ lambda->car.data.word, args });
-        } else {
-            // Otherwise, evaluate args and build new list
-            SmVariable* args = sm_scope_set(&ctx->frame->scope, (SmVariable){ lambda->car.data.word, sm_value_nil() });
-            SmError err = eval_param_list(ctx, &args->value, args);
-            if (err.code != SmErrorOk)
-                return err;
-        }
-    } else {
-        // We have a detailed argument list, walk it and validate args
-
-
-    }
-
-    sm_unused(ret);
+    sm_unused(ctx); sm_unused(lambda); sm_unused(args); sm_unused(ret);
     return sm_ok;
 }
