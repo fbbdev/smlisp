@@ -139,25 +139,25 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     return err;
 }
 
-SmError sm_validate_lambda(SmContext* ctx, SmValue params) {
-    if (sm_value_is_nil(params)) {
-        return sm_error(ctx, SmErrorMissingArguments, "lambda requires at least 1 parameter");
-    } else if (!sm_value_is_cons(params)) {
-        return sm_error(ctx, SmErrorInvalidArgument, "lambda cannot accept a dotted parameter list");
-    } else if (!sm_value_is_word(params.data.cons->car) && (!sm_value_is_list(params.data.cons->car) || sm_value_is_quoted(params.data.cons->car))) {
-        return sm_error(ctx, SmErrorInvalidArgument, "lambda requires a word or an unquoted argument list as first parameter");
-    } else if (sm_value_is_list(params.data.cons->car)) {
-        for (SmCons* arg = params.data.cons->car.data.cons; arg; arg = sm_list_next(arg)) {
+SmError sm_validate_lambda(SmContext* ctx, SmValue args) {
+    if (sm_value_is_nil(args)) {
+        return sm_error(ctx, SmErrorMissingArguments, "lambda requires at least 1 argument");
+    } else if (!sm_value_is_cons(args)) {
+        return sm_error(ctx, SmErrorInvalidArgument, "lambda cannot accept a dotted argument list");
+    } else if (!sm_value_is_word(args.data.cons->car) && (!sm_value_is_list(args.data.cons->car) || sm_value_is_quoted(args.data.cons->car))) {
+        return sm_error(ctx, SmErrorInvalidArgument, "lambda requires a word or an unquoted argument pattern as first argument");
+    } else if (sm_value_is_list(args.data.cons->car)) {
+        for (SmCons* arg = args.data.cons->car.data.cons; arg; arg = sm_list_next(arg)) {
             if (!sm_value_is_word(arg->car)
                     || (!sm_value_is_word(arg->cdr)
                         && (!sm_value_is_list(arg->cdr) || sm_value_is_quoted(arg->cdr))))
             {
-                return sm_error(ctx, SmErrorInvalidArgument, "lambda argument lists may only contain words");
+                return sm_error(ctx, SmErrorInvalidArgument, "lambda argument patterns may only contain words");
             }
         }
     }
 
-    for (SmCons* code = params.data.cons; code; code = sm_list_next(code)) {
+    for (SmCons* code = args.data.cons; code; code = sm_list_next(code)) {
         if (!sm_value_is_list(code->cdr) || sm_value_is_quoted(code->cdr))
             return sm_error(ctx, SmErrorInvalidArgument, "lambda code is a dotted list");
     }
@@ -165,21 +165,21 @@ SmError sm_validate_lambda(SmContext* ctx, SmValue params) {
     return sm_ok;
 }
 
-static SmError eval_param_list(SmContext* ctx, SmValue* ret, SmValue pv) {
+static SmError eval_param_list(SmContext* ctx, SmValue* ret, SmValue av) {
     SmValue* root = NULL;
-    SmCons* params = NULL;
+    SmCons* args = NULL;
 
-    if (sm_value_is_cons(pv)) {
-        params = pv.data.cons;
+    if (sm_value_is_cons(av)) {
+        args = av.data.cons;
     } else {
-        SmError err = sm_eval(ctx, pv, ret);
+        SmError err = sm_eval(ctx, av, ret);
         if (err.code != SmErrorOk)
             return err;
 
         if (sm_value_is_cons(*ret)) {
             root = sm_heap_root(&ctx->heap);
             *root = *ret;
-            params = root->data.cons;
+            args = root->data.cons;
         } else {
             return sm_ok;
         }
@@ -188,19 +188,19 @@ static SmError eval_param_list(SmContext* ctx, SmValue* ret, SmValue pv) {
     *ret = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
     SmCons* param = ret->data.cons;
 
-    SmError err = sm_eval(ctx, params->car, &param->car);
+    SmError err = sm_eval(ctx, args->car, &param->car);
 
-    if (err.code == SmErrorOk && !sm_value_is_list(params->cdr))
-        err = sm_eval(ctx, params->cdr, &param->cdr);
+    if (err.code == SmErrorOk && !sm_value_is_list(args->cdr))
+        err = sm_eval(ctx, args->cdr, &param->cdr);
 
-    for (params = sm_list_next(params); params && err.code == SmErrorOk; params = sm_list_next(params)) {
+    for (args = sm_list_next(args); args && err.code == SmErrorOk; args = sm_list_next(args)) {
         param->cdr = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
         param = sm_list_next(param);
 
-        err = sm_eval(ctx, params->car, &param->car);
+        err = sm_eval(ctx, args->car, &param->car);
 
-        if (err.code == SmErrorOk && !sm_value_is_list(params->cdr))
-            err = sm_eval(ctx, params->cdr, &param->cdr);
+        if (err.code == SmErrorOk && !sm_value_is_list(args->cdr))
+            err = sm_eval(ctx, args->cdr, &param->cdr);
     }
 
     if (err.code != SmErrorOk)
@@ -212,22 +212,22 @@ static SmError eval_param_list(SmContext* ctx, SmValue* ret, SmValue pv) {
     return err;
 }
 
-SmError sm_invoke_lambda(SmContext* ctx, SmCons* lambda, SmValue params, SmValue* ret) {
+SmError sm_invoke_lambda(SmContext* ctx, SmCons* lambda, SmValue args, SmValue* ret) {
     if (sm_value_is_word(lambda->car)) {
         // If argument list is a single word, pass down everything as rest
 
         if (sm_value_is_quoted(lambda->car)) {
-            // If the word is quoted, do not evaluate params
-            sm_scope_set(&ctx->frame->scope, (SmVariable){ lambda->car.data.word, params });
+            // If the word is quoted, do not evaluate args
+            sm_scope_set(&ctx->frame->scope, (SmVariable){ lambda->car.data.word, args });
         } else {
-            // Otherwise, evaluate params and build new list
+            // Otherwise, evaluate args and build new list
             SmVariable* args = sm_scope_set(&ctx->frame->scope, (SmVariable){ lambda->car.data.word, sm_value_nil() });
-            SmError err = eval_param_list(ctx, &args->value, params);
+            SmError err = eval_param_list(ctx, &args->value, args);
             if (err.code != SmErrorOk)
                 return err;
         }
     } else {
-        // We have a detailed argument list, walk it and validate params
+        // We have a detailed argument list, walk it and validate args
 
 
     }

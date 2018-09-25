@@ -54,7 +54,7 @@ void sm_register_builtins(SmContext* ctx);
     builtin_op(div, /)
 
 #define SM_DECLARE_BUILTIN(id) \
-    SmError SM_BUILTIN_SYMBOL(id)(SmContext* ctx, SmValue params, SmValue* ret);
+    SmError SM_BUILTIN_SYMBOL(id)(SmContext* ctx, SmValue args, SmValue* ret);
 #define SM_DECLARE_BUILTIN_OP(symbol, id) SM_DECLARE_BUILTIN(symbol)
 
 SM_BUILTIN_TABLE(SM_DECLARE_BUILTIN, SM_DECLARE_BUILTIN_OP)

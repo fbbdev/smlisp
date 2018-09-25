@@ -18,7 +18,7 @@ typedef struct SmContext {
     SmHeap heap;
 } SmContext;
 
-typedef SmError (*SmExternalFunction)(SmContext* ctx, SmValue params, SmValue* ret);
+typedef SmError (*SmExternalFunction)(SmContext* ctx, SmValue args, SmValue* ret);
 typedef SmError (*SmExternalVariable)(SmContext* ctx, SmValue* ret);
 
 // Context functions
