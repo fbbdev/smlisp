@@ -46,7 +46,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
             // Return lambda wrapping the external function
             sm_build_list(ctx, ret,
                 SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
-                SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("args"))),
+                SmBuildCar, sm_value_quote(sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("args"))), 1),
                 SmBuildList,
                     SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("eval"))),
                     SmBuildList,
