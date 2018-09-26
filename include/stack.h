@@ -36,7 +36,8 @@ inline SmVariable* sm_scope_get(SmScope const* scope, SmWord id) {
     return (SmVariable*) sm_rbtree_find_by_key(scope, sm_word_key(&id));
 }
 
-inline SmVariable* sm_scope_set(SmScope* scope, SmVariable var) {
+inline SmVariable* sm_scope_set(SmScope* scope, SmWord id, SmValue value) {
+    SmVariable var = { id, value };
     return (SmVariable*) sm_rbtree_insert(scope, &var);
 }
 
