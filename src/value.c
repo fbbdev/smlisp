@@ -3,6 +3,7 @@
 #include "util.h"
 
 #include <stdarg.h>
+#include <stdio.h>
 
 // Inlines
 extern inline SmValue sm_value_nil();
@@ -24,6 +25,54 @@ extern inline SmValue sm_list_dot(SmCons* cons);
 extern inline bool sm_list_is_dotted(SmCons* cons);
 extern inline size_t sm_list_size(SmCons* cons);
 
+// Debug helper
+void sm_print_value(FILE* f, SmValue value) {
+    for (uint8_t i = 0; i < value.quotes; ++i)
+        fprintf(f, "\'");
+
+    SmString str;
+
+    switch (value.type) {
+        case SmTypeNil:
+            printf("nil");
+            break;
+        case SmTypeNumber:
+            if (sm_number_is_int(value.data.number))
+                fprintf(f, "%jd", (intmax_t) value.data.number.value.i);
+            else
+                fprintf(f, "%f", value.data.number.value.f);
+            break;
+        case SmTypeWord:
+            str = sm_word_str(value.data.word);
+            fwrite(str.data, str.length, sizeof(char), f);
+            break;
+        case SmTypeCons:
+            fprintf(f, "(");
+
+            sm_print_value(f, value.data.cons->car);
+            if (!sm_value_is_list(value.data.cons->cdr) || sm_value_is_quoted(value.data.cons->cdr)) {
+                fprintf(f, " . ");
+                sm_print_value(f, value.data.cons->cdr);
+            }
+
+            for (SmCons* cons = sm_list_next(value.data.cons); cons; cons = sm_list_next(cons)) {
+                fprintf(f, " ");
+                sm_print_value(f, cons->car);
+
+                if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr)) {
+                    fprintf(f, " . ");
+                    sm_print_value(f, cons->cdr);
+                }
+            }
+
+            fprintf(f, ")");
+            break;
+        default:
+            break;
+    }
+}
+
+// List building
 void build_list_v(SmContext* ctx, SmValue* ret, va_list* args) {
     SmBuildOp op = va_arg(*args, SmBuildOp);
 

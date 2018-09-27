@@ -5,6 +5,7 @@
 #include "word.h"
 
 #include <stdbool.h>
+#include <stdio.h>
 
 struct SmContext;
 
@@ -94,6 +95,9 @@ inline SmValue sm_value_unquote(SmValue value, uint8_t unquotes) {
     value.quotes -= (unquotes < value.quotes) ? unquotes : value.quotes;
     return value;
 }
+
+// Debug helper
+void sm_print_value(FILE* f, SmValue value);
 
 // List functions
 inline bool sm_value_is_list(SmValue value) {
