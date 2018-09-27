@@ -21,6 +21,7 @@ SmContext* sm_context(SmGCConfig gc) {
 
 void sm_context_drop(SmContext* ctx) {
     sm_word_set_drop(&ctx->words);
+    sm_rbtree_drop(&ctx->externals);
     sm_stack_frame_drop(&ctx->main);
     sm_heap_drop(&ctx->heap);
     free(ctx);

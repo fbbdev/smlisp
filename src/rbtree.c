@@ -422,7 +422,7 @@ void* sm_rbtree_next(SmRBTree const* tree, void* element) {
 
     // If we still have a parent, it is our successor; if not, we are back
     // to root after exploring everything so we should return NULL anyway.
-    return node->parent;
+    return node->parent ? (node->parent->data + tree->node_padding) : NULL;
 }
 
 // Lookup

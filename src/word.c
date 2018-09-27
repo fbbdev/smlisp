@@ -21,7 +21,7 @@ SmWord sm_word(SmWordSet* set, SmString str) {
 
         // Copy string and transform to lowercase
         strncpy(buf, str.data, str.length);
-        for (char* p = buf; *p; ++p)
+        for (char *p = buf, *end = buf + str.length; p != end; ++p)
             *p = tolower(*p);
 
         str.data = buf;
