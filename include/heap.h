@@ -36,7 +36,7 @@ inline size_t sm_heap_size(SmHeap const* heap) {
 SmCons* sm_heap_alloc(SmHeap* heap, SmStackFrame const* frame);
 
 SmValue* sm_heap_root(SmHeap* heap);
-void sm_heap_root_drop(SmHeap* heap, SmValue* root);
+void sm_heap_root_drop(SmHeap* heap, SmStackFrame const* frame, SmValue* root);
 
 void sm_heap_unref(SmHeap* heap, SmStackFrame const* frame, uint8_t count);
 

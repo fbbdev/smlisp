@@ -70,6 +70,8 @@ SmCons* sm_heap_alloc(SmHeap* heap, SmStackFrame const* frame) {
     Object* obj = object_new(heap->objects);
     heap->objects = obj;
 
+    ++heap->gc.object_count;
+
     return &obj->cons;
 }
 
@@ -86,7 +88,7 @@ SmValue* sm_heap_root(SmHeap* heap) {
     return &r->value;
 }
 
-void sm_heap_root_drop(SmHeap* heap, SmValue* root) {
+void sm_heap_root_drop(SmHeap* heap, SmStackFrame const* frame, SmValue* root) {
     Root* r = root_from_value(root);
 
     if (r->prev)
@@ -97,7 +99,13 @@ void sm_heap_root_drop(SmHeap* heap, SmValue* root) {
     if (r->next)
         r->next->prev = r->prev;
 
+    if (sm_value_is_cons(r->value))
+        ++heap->gc.unref_count;
+
     free(r);
+
+    if (should_collect(&heap->gc))
+        sm_heap_gc(heap, frame);
 }
 
 void sm_heap_unref(SmHeap* heap, SmStackFrame const* frame, uint8_t count) {

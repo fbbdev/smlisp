@@ -168,7 +168,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
         *ret = sm_value_nil(); // In case of error drop output list
 
     if (eval_dot)
-        sm_heap_root_drop(&ctx->heap, dot_root);
+        sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
 
     return sm_ok;
 }
@@ -188,7 +188,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
             dot_root = sm_heap_root(&ctx->heap);
             SmError err = sm_eval(ctx, dot, dot_root);
             if (!sm_is_ok(err)) {
-                sm_heap_root_drop(&ctx->heap, dot_root);
+                sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
                 return err;
             }
         }
@@ -204,17 +204,17 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
     // Reject invalid argument lists
     if (available < pattern->count) {
         if (dot_root != &dot)
-            sm_heap_root_drop(&ctx->heap, dot_root);
+            sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
         snprintf(err_buf, sizeof(err_buf), "expected %s%zu arguments, %zu given", pattern->rest.use ? "at least " : "", pattern->count, available);
         return sm_error(ctx, SmErrorMissingArguments, err_buf);
     } else if (available > pattern->count && !pattern->rest.use) {
         if (dot_root != &dot)
-            sm_heap_root_drop(&ctx->heap, dot_root);
+            sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
         snprintf(err_buf, sizeof(err_buf), "expected %zu arguments, %zu given", pattern->count, available);
         return sm_error(ctx, SmErrorExcessArguments, err_buf);
     } else if (!pattern->rest.use && (!sm_value_is_nil(final_cdr) || sm_value_is_quoted(final_cdr))) {
         if (dot_root != &dot)
-            sm_heap_root_drop(&ctx->heap, dot_root);
+            sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
         return sm_error(ctx, SmErrorInvalidArgument, "cannot accept dotted argument list");
     }
 
@@ -234,7 +234,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
             // we can just return the evaluated dot part
             sm_scope_set(&ctx->frame->scope, pattern->rest.id, *dot_root);
             if (dot_root != &dot)
-                sm_heap_root_drop(&ctx->heap, dot_root);
+                sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
             return sm_ok;
         }
     }
@@ -314,7 +314,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
     }
 
     if (dot_root != &dot)
-        sm_heap_root_drop(&ctx->heap, dot_root);
+        sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
 
     return sm_ok;
 }

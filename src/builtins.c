@@ -35,7 +35,7 @@ SmError SM_BUILTIN_SYMBOL(eval)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (sm_is_ok(err))
         err = sm_eval(ctx, *form, ret);
 
-    sm_heap_root_drop(&ctx->heap, form);
+    sm_heap_root_drop(&ctx->heap, ctx->frame, form);
     return err;
 }
 

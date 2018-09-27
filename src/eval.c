@@ -50,9 +50,10 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
                 SmBuildList,
                     SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("eval"))),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("list"))),
+                        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("cons"))),
                         SmBuildCar, sm_value_quote(sm_value_word(form.data.word), 1),
-                        SmBuildCdr, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("args"))),
+                        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("args"))),
+                        SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd);
             return sm_ok;
@@ -133,7 +134,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     // Call lambda function
     SmStackFrame frame;
     sm_context_enter_frame(ctx, &frame, fn_name, *fn);
-    sm_heap_root_drop(&ctx->heap, fn);
+    sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
 
     err = sm_invoke_lambda(ctx, sm_list_next(fn->data.cons), call->cdr, ret);
     sm_context_exit_frame(ctx);
