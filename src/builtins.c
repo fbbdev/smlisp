@@ -25,7 +25,7 @@ SmError SM_BUILTIN_SYMBOL(eval)(SmContext* ctx, SmValue args, SmValue* ret) {
 
     SmValue* form = sm_heap_root(&ctx->heap);
     SmError err = sm_eval(ctx, args.data.cons->car, form);
-    if (err.code == SmErrorOk)
+    if (sm_is_ok(err))
         err = sm_eval(ctx, *form, ret);
 
     sm_heap_root_drop(&ctx->heap, form);
@@ -45,7 +45,7 @@ SmError SM_BUILTIN_SYMBOL(cons)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(lambda)(SmContext* ctx, SmValue args, SmValue* ret) {
     SmError err = sm_validate_lambda(ctx, args);
-    if (err.code != SmErrorOk)
+    if (!sm_is_ok(err))
         return err;
 
     SmCons* lambda = sm_heap_alloc(&ctx->heap, ctx->frame);

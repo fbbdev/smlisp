@@ -82,7 +82,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
         eval_dot = false; // We don't need a root later so set eval_dot to false
     } else {
         SmError err = sm_eval(ctx, dot, ret);
-        if (err.code != SmErrorOk)
+        if (!sm_is_ok(err))
             return err;
     }
 
@@ -142,7 +142,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
     for (size_t i = 0; arg; ++i) {
         if (!into_dot && ((i < pattern->count) ? pattern->args[i].eval : pattern->rest.eval)) {
             err = sm_eval(ctx, arg->car, &out->car);
-            if (err.code != SmErrorOk)
+            if (!sm_is_ok(err))
                 break;
         } else {
             out->car = arg->car;
@@ -164,7 +164,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
 
     out->cdr = final_cdr;
 
-    if (err.code != SmErrorOk)
+    if (!sm_is_ok(err))
         *ret = sm_value_nil(); // In case of error drop output list
 
     if (eval_dot)
@@ -187,7 +187,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
         } else {
             dot_root = sm_heap_root(&ctx->heap);
             SmError err = sm_eval(ctx, dot, dot_root);
-            if (err.code != SmErrorOk) {
+            if (!sm_is_ok(err)) {
                 sm_heap_root_drop(&ctx->heap, dot_root);
                 return err;
             }
@@ -253,7 +253,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
         if (!into_dot && pattern->args[i].eval) {
             SmVariable* var = sm_scope_set(&ctx->frame->scope, pattern->args[i].id, sm_value_nil());
             err = sm_eval(ctx, arg->car, &var->value);
-            if (err.code != SmErrorOk)
+            if (!sm_is_ok(err))
                 break;
         } else {
             sm_scope_set(&ctx->frame->scope, pattern->args[i].id, arg->car);
@@ -268,7 +268,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
         }
     }
 
-    if (err.code == SmErrorOk && pattern->rest.use) {
+    if (sm_is_ok(err) && pattern->rest.use) {
         // Rest argument takes the value of the dot part...
         SmVariable* var = sm_scope_set(&ctx->frame->scope, pattern->rest.id, final_cdr);
 
@@ -280,7 +280,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
             while (arg) {
                 if (!into_dot && pattern->rest.eval) {
                     err = sm_eval(ctx, arg->car, &rest->car);
-                    if (err.code != SmErrorOk)
+                    if (!sm_is_ok(err))
                         break;
                 } else {
                     rest->car = arg->car;
@@ -304,7 +304,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
         }
     }
 
-    if (err.code != SmErrorOk) {
+    if (!sm_is_ok(err)) {
         // In case of error remove already unpacked args from scope
         for (size_t i = 0; i < pattern->count; ++i)
             sm_scope_delete(&ctx->frame->scope, pattern->args[i].id);

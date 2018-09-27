@@ -101,7 +101,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     SmExternalVariable ext_var = sm_context_lookup_variable(ctx, call->car.data.word);
     if (ext_var) {
         SmError err = ext_var(ctx, fn);
-        if (err.code != SmErrorOk)
+        if (!sm_is_ok(err))
             return err;
     } else {
         // Lookup function as variable in scope
@@ -124,7 +124,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     }
 
     SmError err = sm_validate_lambda(ctx, fn->data.cons->cdr);
-    if (err.code != SmErrorOk) {
+    if (!sm_is_ok(err)) {
         snprintf(err_buf, sizeof(err_buf), "%.*s is not a function: %.*s",
                  (int) fn_name.length, fn_name.data, (int) err.message.length, err.message.data);
         return sm_error(ctx, SmErrorInvalidArgument, err_buf);
@@ -162,7 +162,7 @@ SmError sm_invoke_lambda(SmContext* ctx, SmCons* lambda, SmValue args, SmValue* 
     SmError err = sm_arg_pattern_unpack(&pattern, ctx, args);
     sm_arg_pattern_drop(&pattern);
 
-    if (err.code != SmErrorOk)
+    if (!sm_is_ok(err))
         return err;
 
     // Return nil when code list is empty
@@ -172,7 +172,7 @@ SmError sm_invoke_lambda(SmContext* ctx, SmCons* lambda, SmValue args, SmValue* 
     for (SmCons* code = sm_list_next(lambda); code; code = sm_list_next(code)) {
         *ret = sm_value_nil();
         err = sm_eval(ctx, code->car, ret);
-        if (err.code != SmErrorOk)
+        if (!sm_is_ok(err))
             return err;
     }
 
