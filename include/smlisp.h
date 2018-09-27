@@ -8,6 +8,7 @@
 #include "hash.h"
 #include "heap.h"
 #include "number.h"
+#include "parser.h"
 #include "rbtree.h"
 #include "stack.h"
 #include "util.h"
