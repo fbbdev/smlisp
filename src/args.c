@@ -43,6 +43,7 @@ SmArgPattern sm_arg_pattern_from_spec(SmValue spec) {
         pattern.rest.id = spec.data.word;
         pattern.rest.eval = sm_value_is_unquoted(spec);
         pattern.rest.use = true;
+        return pattern;
     }
 
     pattern.count = sm_list_size(spec.data.cons);
