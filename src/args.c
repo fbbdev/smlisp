@@ -170,7 +170,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
     if (eval_dot)
         sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
 
-    return sm_ok;
+    return err;
 }
 
 SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmValue args) {
@@ -316,5 +316,5 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
     if (dot_root != &dot)
         sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
 
-    return sm_ok;
+    return err;
 }
