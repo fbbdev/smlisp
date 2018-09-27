@@ -5,7 +5,9 @@
 extern inline void sm_context_enter_frame(SmContext* ctx, SmStackFrame* frame, SmString name, SmValue fn);
 extern inline void sm_context_exit_frame(SmContext* ctx);
 
-void sm_context_init(SmContext* ctx, SmGCConfig gc) {
+SmContext* sm_context(SmGCConfig gc) {
+    SmContext* ctx = sm_aligned_alloc(sm_alignof(SmContext), sizeof(SmContext));
+
     *ctx = (SmContext){
         sm_word_set(),
         sm_rbtree(sizeof(External), sm_alignof(External), sm_word_key, sm_key_compare_ptr),
@@ -13,12 +15,15 @@ void sm_context_init(SmContext* ctx, SmGCConfig gc) {
         &ctx->main,
         sm_heap(gc)
     };
+
+    return ctx;
 }
 
 void sm_context_drop(SmContext* ctx) {
     sm_word_set_drop(&ctx->words);
     sm_stack_frame_drop(&ctx->main);
     sm_heap_drop(&ctx->heap);
+    free(ctx);
 }
 
 // External management

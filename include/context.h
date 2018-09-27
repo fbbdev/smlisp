@@ -22,7 +22,7 @@ typedef SmError (*SmExternalFunction)(SmContext* ctx, SmValue args, SmValue* ret
 typedef SmError (*SmExternalVariable)(SmContext* ctx, SmValue* ret);
 
 // Context functions
-void sm_context_init(SmContext* ctx, SmGCConfig gc);
+SmContext* sm_context(SmGCConfig gc);
 void sm_context_drop(SmContext* ctx);
 
 inline void sm_context_enter_frame(SmContext* ctx, SmStackFrame* frame, SmString name, SmValue fn) {

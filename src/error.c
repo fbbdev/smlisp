@@ -20,6 +20,7 @@ static char const* error_codes[SmErrorCount] = {
     "Generic"
 };
 
+// Error reporting functions
 SmString sm_error_code_string(SmErrorCode code) {
     return sm_string_from_cstring(error_codes[code]);
 }

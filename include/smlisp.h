@@ -1,7 +1,9 @@
 #pragma once
 
+#include "args.h"
 #include "builtins.h"
 #include "context.h"
+#include "error.h"
 #include "eval.h"
 #include "hash.h"
 #include "heap.h"
