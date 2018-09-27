@@ -66,7 +66,7 @@ SmArgPattern sm_arg_pattern_from_spec(SmValue spec) {
 }
 
 SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue args, SmValue* ret) {
-    SmCons* arg = (sm_value_is_cons(args) && !sm_value_is_unquoted(args)) ? args.data.cons : NULL;
+    SmCons* arg = (sm_value_is_cons(args) && sm_value_is_unquoted(args)) ? args.data.cons : NULL;
     size_t available = sm_list_size(arg);
 
     SmValue dot = arg ? sm_list_dot(arg) : args;
@@ -174,7 +174,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
 }
 
 SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmValue args) {
-    SmCons* arg = (sm_value_is_cons(args) && !sm_value_is_unquoted(args)) ? args.data.cons : NULL;
+    SmCons* arg = (sm_value_is_cons(args) && sm_value_is_unquoted(args)) ? args.data.cons : NULL;
     size_t available = sm_list_size(arg);
 
     SmValue dot = arg ? sm_list_dot(arg) : args;
