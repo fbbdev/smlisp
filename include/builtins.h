@@ -13,6 +13,8 @@ void sm_register_builtins(SmContext* ctx);
     builtin(print) \
 \
     builtin(cons) \
+    builtin(list) \
+    builtin_op(list_dot, list*) \
     builtin(lambda) \
     builtin(quote) \
 \
