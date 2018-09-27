@@ -153,6 +153,28 @@ SmError sm_validate_lambda(SmContext* ctx, SmValue args) {
 }
 
 SmError sm_invoke_lambda(SmContext* ctx, SmCons* lambda, SmValue args, SmValue* ret) {
-    sm_unused(ctx); sm_unused(lambda); sm_unused(args); sm_unused(ret);
+    // lambda should be a valid lambda expression (omitting the 'lambda' word)
+    // see sm_validate_lambda
+
+    SmArgPattern pattern = sm_arg_pattern_from_spec(lambda->car);
+
+    // Unpack arguments into scope
+    SmError err = sm_arg_pattern_unpack(&pattern, ctx, args);
+    sm_arg_pattern_drop(&pattern);
+
+    if (err.code != SmErrorOk)
+        return err;
+
+    // Return nil when code list is empty
+    *ret = sm_value_nil();
+
+    // Run each form in code list, return result of last one
+    for (SmCons* code = sm_list_next(lambda); code; code = sm_list_next(code)) {
+        *ret = sm_value_nil();
+        err = sm_eval(ctx, code->car, ret);
+        if (err.code != SmErrorOk)
+            return err;
+    }
+
     return sm_ok;
 }
