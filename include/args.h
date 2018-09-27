@@ -7,11 +7,13 @@
 
 #include <stdlib.h>
 
+typedef struct SmArgPatternArg {
+    SmWord id;
+    bool eval;
+} SmArgPatternArg;
+
 typedef struct SmArgPattern {
-    struct SmArgPatternArg {
-        SmWord id;
-        bool eval;
-    } const* args;
+    SmArgPatternArg const* args;
     size_t count;
 
     struct {

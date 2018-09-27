@@ -46,8 +46,8 @@ SmArgPattern sm_arg_pattern_from_spec(SmValue spec) {
 
     pattern.count = sm_list_size(spec.data.cons);
 
-    struct SmArgPatternArg* args =
-        (struct SmArgPatternArg*) calloc(pattern.count, sizeof(struct SmArgPatternArg));
+    SmArgPatternArg* args =
+        (SmArgPatternArg*) calloc(pattern.count, sizeof(SmArgPatternArg));
 
     pattern.args = args;
 
