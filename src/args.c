@@ -14,8 +14,9 @@ static sm_thread_local char err_buf[1024];
 SmError sm_arg_pattern_validate_spec(SmContext* ctx, SmValue spec) {
     if (!sm_value_is_word(spec) && !sm_value_is_list(spec)) {
         return sm_error(ctx, SmErrorInvalidArgument, "argument pattern must be a word or unquoted list");
-    } else if (sm_value_is_word(spec) && spec.quotes > 1) {
-        return sm_error(ctx, SmErrorInvalidArgument, "argument pattern quoted more than once");
+    } else if (sm_value_is_word(spec)) {
+        if (spec.quotes > 1)
+            return sm_error(ctx, SmErrorInvalidArgument, "argument pattern quoted more than once");
     } else if (sm_value_is_quoted(spec)) {
         return sm_error(ctx, SmErrorInvalidArgument, "argument pattern cannot be a quoted list");
     } else {
