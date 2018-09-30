@@ -1,7 +1,9 @@
 #include "context.h"
+#include "parser.h"
 #include "value.h"
 #include "util.h"
 
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -25,6 +27,28 @@ extern inline SmValue sm_list_dot(SmCons* cons);
 extern inline bool sm_list_is_dotted(SmCons* cons);
 extern inline size_t sm_list_size(SmCons* cons);
 
+// Private helpers
+static inline bool is_piped_word(SmString str) {
+    if (str.length == 0)
+        return true;
+
+    if (str.data[0] == '.' && str.length == 1)
+        return true;
+
+    if (sm_can_parse_float(str))
+        return true;
+
+    for (size_t i = 0; i < str.length; ++i) {
+        if (isspace(str.data[i]) || str.data[i] == '(' ||
+            str.data[i] == ')' || str.data[i] == '\'')
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // Debug helper
 void sm_print_value(FILE* f, SmValue value) {
     for (uint8_t i = 0; i < value.quotes; ++i)
@@ -44,7 +68,15 @@ void sm_print_value(FILE* f, SmValue value) {
             break;
         case SmTypeWord:
             str = sm_word_str(value.data.word);
+
+            bool piped = is_piped_word(str);
+            if (piped)
+                fprintf(f, "|");
+
             fwrite(str.data, str.length, sizeof(char), f);
+
+            if (piped)
+                fprintf(f, "|");
             break;
         case SmTypeCons:
             fprintf(f, "(");
