@@ -13,18 +13,14 @@ typedef enum SmType {
     SmTypeNil = 0,
     SmTypeNumber,
     SmTypeWord,
-    SmTypeCons,
-
-    SmTypeCount
+    SmTypeCons
 } SmType;
 
 typedef enum SmBuildOp {
     SmBuildEnd = 0,
     SmBuildCar,
     SmBuildCdr,
-    SmBuildList,
-
-    SmBuildOpCount
+    SmBuildList
 } SmBuildOp;
 
 typedef struct SmValue {
