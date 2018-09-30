@@ -1,6 +1,6 @@
-default: lib
+default: lib bin
 
-.PHONY: lib test clean clean_test
+.PHONY: lib bin test clean clean_test
 
 CC = gcc
 LD = gcc
@@ -11,7 +11,7 @@ RM = rm -rf
 CSTD          = c99
 CFLAGS        = -std=$(CSTD) -Wall -Wextra -pedantic -Werror -I$(INCLUDEDIR)
 LDFLAGS       =
-LIBS          =
+LIBS          = -lm
 ARFLAGS       = cr
 
 TESTFLAGS     = -fsanitize=address -fsanitize=leak -fsanitize=undefined
@@ -49,13 +49,17 @@ $(OBJDIR)/%.o : $(SRCDIR)/%.c $(DEPDIR)/%.d | $(DIRS)
 	$(CC) $(DEPFLAGS) $(CFLAGS) -c -o $@ $<
 	@mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d && touch $@
 
-$(BUILDDIR)/libsmlisp.a : $(OBJS) | $(DIRS)
+$(BUILDDIR)/libsmlisp.a : $(filter-out %/main.o,$(OBJS)) | $(DIRS)
 	$(AR) $(ARFLAGS) $@ $^
 
-lib: $(BUILDDIR)/libsmlisp.a
+$(BUILDDIR)/smlisp : $(OBJDIR)/main.o $(BUILDDIR)/libsmlisp.a | $(DIRS)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(TESTDIR)/% : $(SRCDIR)/%_test.c $(SRCDIR)/%.c $(SRCDIR)/util.c | $(DIRS)
 	$(CC) $(CFLAGS) $(TESTFLAGS) $(LDFLAGS) -o $@ $^
+
+lib: $(BUILDDIR)/libsmlisp.a
+bin: $(BUILDDIR)/smlisp
 
 test: clean_test $(TESTS)
 	@echo Starting test suite
