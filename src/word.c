@@ -17,12 +17,8 @@ SmWord sm_word(SmWordSet* set, SmString str) {
     SmWord word = (SmWord) sm_rbtree_find(set, &str);
 
     if (!word) {
-        char* buf = sm_aligned_alloc(sm_alignof(char), str.length*sizeof(char));
-
-        // Copy string and transform to lowercase
+        char* buf = sm_aligned_alloc(16, str.length*sizeof(char));
         strncpy(buf, str.data, str.length);
-        for (char *p = buf, *end = buf + str.length; p != end; ++p)
-            *p = tolower(*p);
 
         str.data = buf;
 
