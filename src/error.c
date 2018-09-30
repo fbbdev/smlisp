@@ -17,6 +17,8 @@ static char const* error_codes[SmErrorCount] = {
     "ExcessArguments",
     "InvalidArgument",
     "UndefinedVariable",
+    "SyntaxError",
+    "LexicalError",
     "Generic"
 };
 
@@ -25,7 +27,7 @@ SmString sm_error_code_string(SmErrorCode code) {
     return sm_string_from_cstring(error_codes[code]);
 }
 
-SmError sm_error(struct SmContext* ctx, SmErrorCode err, char const* msg) {
+SmError sm_error(struct SmContext const* ctx, SmErrorCode err, char const* msg) {
     // Build stack trace
     char* p = &frame_buf[1023];
     *p = '\0';

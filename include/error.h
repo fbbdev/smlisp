@@ -12,6 +12,8 @@ typedef enum SmErrorCode {
     SmErrorExcessArguments,
     SmErrorInvalidArgument,
     SmErrorUndefinedVariable,
+    SmErrorSyntaxError,
+    SmErrorLexicalError,
     SmErrorGeneric,
 
     SmErrorCount
@@ -31,7 +33,7 @@ inline bool sm_is_ok(SmError err) {
     return err.code == SmErrorOk;
 }
 
-SmError sm_error(struct SmContext* ctx, SmErrorCode err, char const* msg);
+SmError sm_error(struct SmContext const* ctx, SmErrorCode err, char const* msg);
 
 inline void sm_report_error(FILE* f, SmError err) {
     SmString code_string = sm_error_code_string(err.code);
