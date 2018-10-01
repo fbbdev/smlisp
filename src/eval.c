@@ -36,6 +36,12 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
             return sm_ok;
         }
 
+        // nil represents ()
+        if (var_name.length == 3 && strncmp(var_name.data, "nil", 3) == 0) {
+            *ret = sm_value_nil();
+            return sm_ok;
+        }
+
         // Lookup external variable
         SmExternalVariable ext_var = sm_context_lookup_variable(ctx, form.data.word);
         if (ext_var)
@@ -86,9 +92,12 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     SmString fn_name = sm_word_str(call->car.data.word);
 
     if (fn_name.length && fn_name.data[0] == ':') {
-        snprintf(err_buf, sizeof(err_buf), "keyword %.*s is not a function name", (int) fn_name.length, fn_name.data);
+        snprintf(err_buf, sizeof(err_buf), "keyword %.*s is not a valid function name", (int) fn_name.length, fn_name.data);
         return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
+
+    if (fn_name.length == 3 && strncmp(fn_name.data, "nil", 3) == 0)
+        return sm_error(ctx, SmErrorInvalidArgument, "nil is not a valid function name");
 
     // Lookup external function
     SmExternalFunction ext_fn = sm_context_lookup_function(ctx, call->car.data.word);
@@ -106,7 +115,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
             return err;
     } else {
         // Lookup function as variable in scope
-        SmVariable* scope_var = scope_lookup(ctx->frame, form.data.word);
+        SmVariable* scope_var = scope_lookup(ctx->frame, call->car.data.word);
         if (!scope_var) {
             snprintf(err_buf, sizeof(err_buf), "function not found: %.*s", (int) fn_name.length, fn_name.data);
             return sm_error(ctx, SmErrorUndefinedVariable, err_buf);
@@ -136,7 +145,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     sm_context_enter_frame(ctx, &frame, fn_name, *fn);
     sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
 
-    err = sm_invoke_lambda(ctx, sm_list_next(fn->data.cons), call->cdr, ret);
+    err = sm_invoke_lambda(ctx, sm_list_next(frame.fn.data.cons), call->cdr, ret);
     sm_context_exit_frame(ctx);
 
     return err;
