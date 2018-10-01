@@ -33,7 +33,7 @@ bool validate_tree(Node const* node, Node const* parent,
                    TreeStats* stats) {
     bool result = true;
 
-    TreeStats root_stats = {0};
+    TreeStats root_stats = { 0, 0, 0 };
     if (!stats)
         stats = &root_stats;
 
@@ -121,10 +121,10 @@ bool validate_tree(Node const* node, Node const* parent,
     }
 
     // Verify lower branches
-    TreeStats left_stats = { 0 };
+    TreeStats left_stats = { 0, 0, 0 };
     bool left_result = validate_tree(node->left, node, tree, element_alignment, &left_stats);
 
-    TreeStats right_stats = { 0 };
+    TreeStats right_stats = { 0, 0, 0 };
     bool right_result = validate_tree(node->right, node, tree, element_alignment, &right_stats);
 
     // Verify black height

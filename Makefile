@@ -55,8 +55,8 @@ $(BUILDDIR)/libsmlisp.a : $(filter-out %/main.o,$(OBJS)) | $(DIRS)
 $(BUILDDIR)/smlisp : $(OBJDIR)/main.o $(BUILDDIR)/libsmlisp.a | $(DIRS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-$(TESTDIR)/% : $(SRCDIR)/%_test.c $(SRCDIR)/%.c $(SRCDIR)/util.c | $(DIRS)
-	$(CC) $(CFLAGS) $(TESTFLAGS) $(LDFLAGS) -o $@ $^
+$(TESTDIR)/% : $(SRCDIR)/%_test.c $(BUILDDIR)/libsmlisp.a | $(DIRS)
+	$(CC) $(CFLAGS) $(TESTFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 lib: $(BUILDDIR)/libsmlisp.a
 bin: $(BUILDDIR)/smlisp
