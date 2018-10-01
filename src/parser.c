@@ -332,10 +332,9 @@ static SmError parse_word(SmParser const* parser, SmContext* ctx, Token tok, SmW
 }
 
 // Paser functions
-bool sm_parser_finished(SmParser const* parser) {
-    SmParser copy = *parser;
-    consume_whitespace(&copy);
-    return copy.source.length == 0;
+bool sm_parser_finished(SmParser* parser) {
+    consume_whitespace(parser);
+    return parser->source.length == 0;
 }
 
 SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
