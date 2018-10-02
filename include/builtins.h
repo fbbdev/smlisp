@@ -14,6 +14,7 @@ void sm_register_builtins(SmContext* ctx);
 \
     builtin(set) \
     builtin(setq) \
+    builtin(let) \
 \
     builtin(cons) \
     builtin(list) \

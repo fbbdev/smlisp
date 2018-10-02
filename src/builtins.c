@@ -161,6 +161,72 @@ SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
     return sm_ok;
 }
 
+SmError SM_BUILTIN_SYMBOL(let)(SmContext* ctx, SmValue args, SmValue* ret) {
+    if (!sm_value_is_list(args) || sm_value_is_quoted(args))
+        return sm_error(ctx, SmErrorMissingArguments, "let cannot accept a dotted argument list");
+    else if (sm_value_is_nil(args))
+        return sm_error(ctx, SmErrorMissingArguments, "let requires at least 1 argument");
+    else if (!sm_value_is_list(args.data.cons->cdr) || sm_value_is_quoted(args.data.cons->cdr))
+        return sm_error(ctx, SmErrorMissingArguments, "let cannot accept a dotted code list");
+    else if (!sm_value_is_list(args.data.cons->car) || sm_value_is_quoted(args.data.cons->car))
+        return sm_error(ctx, SmErrorInvalidArgument, "first argument to let must be an unquoted binding list");
+
+    // FIXME: This implementation is wrong, works like (let*)
+    // Fix must wait for proper scope separation
+    SmStackFrame frame;
+    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("let"), sm_value_nil());
+
+    for (SmCons* cons = args.data.cons->car.data.cons; cons; cons = sm_list_next(cons)) {
+        if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
+            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let cannot accept a dotted binding list"));
+        else if ((!sm_value_is_word(cons->car) && !sm_value_is_cons(cons->car)) || sm_value_is_quoted(cons->car))
+            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or words"));
+        else if (sm_value_is_cons(cons->car)) {
+            if (!sm_value_is_cons(cons->car.data.cons->cdr) || sm_value_is_quoted(cons->car.data.cons->cdr))
+                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or words"));
+            else if (!sm_value_is_nil(cons->car.data.cons->cdr.data.cons->cdr) || sm_value_is_quoted(cons->car.data.cons->cdr.data.cons->cdr))
+                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or words"));
+            else if (!sm_value_is_word(cons->car.data.cons->car) || sm_value_is_quoted(cons->car.data.cons->car))
+                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "list elements in let binding lists must be (word expression) pairs"));
+        }
+
+        SmWord id = sm_value_is_word(cons->car) ? cons->car.data.word : cons->car.data.cons->car.data.word;
+        SmString str = sm_word_str(id);
+        if (str.length && str.data[0] == ':')
+            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "keyword cannot be used as variable name"));
+
+        if (str.length == 3 && strncmp(str.data, "nil", 3) == 0)
+            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name"));
+
+        SmVariable* var = sm_scope_set(&frame.scope, id, sm_value_nil());
+
+        if (sm_value_is_cons(cons->car)) {
+            SmError err = sm_eval(ctx, cons->car.data.cons->cdr.data.cons->car, &var->value);
+            if (!sm_is_ok(err))
+                return_nil_exit_frame(ctx, err);
+        }
+    }
+
+    SmError err = sm_ok;
+
+    // Return nil when code list is empty
+    *ret = sm_value_nil();
+
+    // Run each form in code list, return result of last one
+    for (SmCons* code = sm_list_next(args.data.cons); code; code = sm_list_next(code)) {
+        if (!sm_value_is_list(code->cdr) || sm_value_is_quoted(code->cdr))
+            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let cannot accept a dotted code list"));
+
+        *ret = sm_value_nil();
+        err = sm_eval(ctx, code->car, ret);
+        if (!sm_is_ok(err))
+            return_nil_exit_frame(ctx, err);
+    }
+
+    sm_context_exit_frame(ctx);
+    return sm_ok;
+}
+
 
 SmError SM_BUILTIN_SYMBOL(cons)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
