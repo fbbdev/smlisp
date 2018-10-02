@@ -25,7 +25,7 @@ SmError sm_arg_pattern_validate_spec(SmContext* ctx, SmValue spec) {
                     (!sm_value_is_word(arg->cdr) &&
                         (!sm_value_is_list(arg->cdr) || sm_value_is_quoted(arg->cdr))))
             {
-                return sm_error(ctx, SmErrorInvalidArgument, "argument pattern lists can only contain words");
+                return sm_error(ctx, SmErrorInvalidArgument, "argument pattern lists may contain only words");
             } else if (arg->car.quotes > 1 || (sm_value_is_word(arg->cdr) && arg->cdr.quotes > 1)) {
                 return sm_error(ctx, SmErrorInvalidArgument, "word in argument pattern list quoted more than once");
             }

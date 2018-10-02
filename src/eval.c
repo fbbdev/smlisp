@@ -111,13 +111,16 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     SmExternalVariable ext_var = sm_context_lookup_variable(ctx, call->car.data.word);
     if (ext_var) {
         SmError err = ext_var(ctx, fn);
-        if (!sm_is_ok(err))
+        if (!sm_is_ok(err)) {
+            sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
             return err;
+        }
     } else {
         // Lookup function as variable in scope
         SmVariable* scope_var = scope_lookup(ctx->frame, call->car.data.word);
         if (!scope_var) {
             snprintf(err_buf, sizeof(err_buf), "function not found: %.*s", (int) fn_name.length, fn_name.data);
+            sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
             return sm_error(ctx, SmErrorUndefinedVariable, err_buf);
         }
 
@@ -130,13 +133,15 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
         strncmp(sm_word_str(fn->data.cons->car.data.word).data, "lambda", 6) != 0)
     {
         snprintf(err_buf, sizeof(err_buf), "%.*s is not a function", (int) fn_name.length, fn_name.data);
+        sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
         return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
 
     SmError err = sm_validate_lambda(ctx, fn->data.cons->cdr);
     if (!sm_is_ok(err)) {
-        snprintf(err_buf, sizeof(err_buf), "%.*s is not a function: %.*s",
+        snprintf(err_buf, sizeof(err_buf), "%.*s is not a valid function: %.*s",
                  (int) fn_name.length, fn_name.data, (int) err.message.length, err.message.data);
+         sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
         return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
 
