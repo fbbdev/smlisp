@@ -39,7 +39,7 @@ inline SmNumber sm_number_as_float(SmNumber number) {
 inline SmNumber sm_number_as_type(SmNumberType type, SmNumber number) {
     return (number.type == type) ?
         number : (SmNumber){ type, (type == SmNumberTypeInt) ? (SmNumberValue){ .i = (int64_t) number.value.f }
-                                                             : (SmNumberValue){ .f = (int64_t) number.value.i }
+                                                             : (SmNumberValue){ .f = (double) number.value.i }
     };
 }
 

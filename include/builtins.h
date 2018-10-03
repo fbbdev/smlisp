@@ -14,7 +14,10 @@ void sm_register_builtins(SmContext* ctx);
 \
     builtin(set) \
     builtin(setq) \
+\
+    builtin(do) \
     builtin(let) \
+    builtin(if) \
 \
     builtin(cons) \
     builtin(list) \
@@ -59,7 +62,18 @@ void sm_register_builtins(SmContext* ctx);
     builtin_op(add, +) \
     builtin_op(sub, -) \
     builtin_op(mul, *) \
-    builtin_op(div, /)
+    builtin_op(div, /) \
+\
+    builtin_op(eq,   =) \
+    builtin_op(neq,  !=) \
+    builtin_op(lt,   <) \
+    builtin_op(lteq, <=) \
+    builtin_op(gt,   >) \
+    builtin_op(gteq, >=) \
+\
+    builtin(not) \
+    builtin(and) \
+    builtin(or)
 
 #define SM_DECLARE_BUILTIN(id) \
     SmError SM_BUILTIN_SYMBOL(id)(SmContext* ctx, SmValue args, SmValue* ret);

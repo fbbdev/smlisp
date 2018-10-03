@@ -63,12 +63,8 @@ static bool complete(char const* buf) {
     return parens == 0;
 }
 
-static int interactive(char const* progname) {
+static int interactive(SmContext* ctx, char const* progname) {
     int exit_code = 0;
-
-    SmContext* ctx = sm_context((SmGCConfig) { 64, 2, 64 });
-    sm_register_builtins(ctx);
-    sm_context_register_function(ctx, sm_word(&ctx->words, sm_string_from_cstring("exit")), builtin_exit);
 
     SmValue* forms = sm_heap_root(&ctx->heap);
     SmValue* res = sm_heap_root(&ctx->heap);
@@ -143,8 +139,6 @@ static int interactive(char const* progname) {
         }
     }
 
-    sm_context_drop(ctx);
-
     return exit_code;
 }
 
@@ -153,19 +147,28 @@ int main(int argc, char** argv) {
     if (!strlen(progname))
         progname = "smlisp";
 
-    if (argc < 2)
-        return interactive(progname);
-
     int exit_code = 0;
 
     SmContext* ctx = sm_context((SmGCConfig) { 64, 2, 64 });
     sm_register_builtins(ctx);
     sm_context_register_function(ctx, sm_word(&ctx->words, sm_string_from_cstring("exit")), builtin_exit);
 
+    if (argc < 2) {
+        exit_code = interactive(ctx, progname);
+        sm_context_drop(ctx);
+        return exit_code;
+    }
+
     SmValue* forms = sm_heap_root(&ctx->heap);
     SmValue* res = sm_heap_root(&ctx->heap);
 
     for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "-") == 0) {
+            exit_code = interactive(ctx, progname);
+            if (exit_code != 0)
+                break;
+        }
+
         FILE* f = fopen(argv[i], "r");
         if (!f) {
             fprintf(stderr, "%s: %s: %s\n", progname, argv[i], strerror(errno));
