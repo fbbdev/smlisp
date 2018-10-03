@@ -70,9 +70,12 @@ static size_t consume(SmParser* parser, size_t amount) {
 }
 
 static size_t consume_whitespace(SmParser* parser) {
+    // Also consumes comments
     size_t consumed = 0;
 
-    while (parser->source.length > 0 && isspace(*parser->source.data)) {
+    bool comment = (*parser->source.data == ';');
+
+    while (parser->source.length > 0 && (isspace(*parser->source.data) || comment)) {
         bool nl = (*parser->source.data == '\n');
 
         ++parser->source.data;
@@ -83,6 +86,8 @@ static size_t consume_whitespace(SmParser* parser) {
         parser->location.col = nl ? 1 : parser->location.col + 1;
 
         ++consumed;
+
+        comment = (comment && !nl) || (parser->source.length > 0 && *parser->source.data == ';');
     }
 
     return consumed;
