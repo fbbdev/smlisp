@@ -13,6 +13,7 @@ typedef enum SmType {
     SmTypeNil = 0,
     SmTypeNumber,
     SmTypeWord,
+    SmTypeString,
     SmTypeCons
 } SmType;
 
@@ -30,6 +31,7 @@ typedef struct SmValue {
     union {
         SmNumber number;
         SmWord word;
+        SmString string;
         struct SmCons* cons;
     } data;
 } SmValue;
@@ -52,6 +54,10 @@ inline SmValue sm_value_word(SmWord word) {
     return (SmValue){ SmTypeWord, 0, { .word = word } };
 }
 
+inline SmValue sm_value_string(SmString string) {
+    return (SmValue){ SmTypeString, 0, { .string = string } };
+}
+
 inline SmValue sm_value_cons(SmCons* cons) {
     sm_assert(cons != NULL);
     return (SmValue){ SmTypeCons, 0, { .cons = cons } };
@@ -67,6 +73,10 @@ inline bool sm_value_is_number(SmValue value) {
 
 inline bool sm_value_is_word(SmValue value) {
     return value.type == SmTypeWord;
+}
+
+inline bool sm_value_is_string(SmValue value) {
+    return value.type == SmTypeString;
 }
 
 inline bool sm_value_is_cons(SmValue value) {

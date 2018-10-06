@@ -11,10 +11,12 @@
 extern inline SmValue sm_value_nil();
 extern inline SmValue sm_value_number(SmNumber number);
 extern inline SmValue sm_value_word(SmWord word);
+extern inline SmValue sm_value_string(SmString string);
 extern inline SmValue sm_value_cons(SmCons* cons);
 extern inline bool sm_value_is_nil(SmValue value);
 extern inline bool sm_value_is_number(SmValue value);
 extern inline bool sm_value_is_word(SmValue value);
+extern inline bool sm_value_is_string(SmValue value);
 extern inline bool sm_value_is_cons(SmValue value);
 extern inline bool sm_value_is_unquoted(SmValue value);
 extern inline bool sm_value_is_quoted(SmValue value);
@@ -28,7 +30,7 @@ extern inline bool sm_list_is_dotted(SmCons* cons);
 extern inline size_t sm_list_size(SmCons* cons);
 
 // Private helpers
-static inline bool is_piped_word(SmString str) {
+static bool is_piped_word(SmString str) {
     if (str.length == 0)
         return true;
 
@@ -40,13 +42,38 @@ static inline bool is_piped_word(SmString str) {
 
     for (size_t i = 0; i < str.length; ++i) {
         if (isspace(str.data[i]) || str.data[i] == '(' ||
-            str.data[i] == ')' || str.data[i] == '\'')
+            str.data[i] == ')' || str.data[i] == '\'' || str.data[i] == '"')
         {
             return true;
         }
     }
 
     return false;
+}
+
+static inline char const* escape_char(char chr) {
+    switch (chr) {
+        case '\\':
+            return "\\\\";
+        case '\"':
+            return "\\\"";
+        case '\n':
+            return "\\n";
+        case '\r':
+            return "\\r";
+        case '\b':
+            return "\\b";
+        case '\t':
+            return "\\t";
+        case '\f':
+            return "\\f";
+        case '\a':
+            return "\\a";
+        case '\v':
+            return "\\v";
+        default:
+            return NULL;
+    }
 }
 
 // Debug helper
@@ -60,12 +87,14 @@ void sm_print_value(FILE* f, SmValue value) {
         case SmTypeNil:
             printf("nil");
             break;
+
         case SmTypeNumber:
             if (sm_number_is_int(value.data.number))
                 fprintf(f, "%jd", (intmax_t) value.data.number.value.i);
             else
                 fprintf(f, "%f", value.data.number.value.f);
             break;
+
         case SmTypeWord:
             str = sm_word_str(value.data.word);
 
@@ -78,6 +107,21 @@ void sm_print_value(FILE* f, SmValue value) {
             if (piped)
                 fprintf(f, "|");
             break;
+
+        case SmTypeString:
+            fprintf(f, "\"");
+            for (char const *p = value.data.string.data, *end = p + value.data.string.length;
+                 p != end; ++p)
+            {
+                char const* esc = escape_char(*p);
+                if (esc)
+                    fprintf(f, "%s", esc);
+                else
+                    fprintf(f, "%c", *p);
+            }
+            fprintf(f, "\"");
+            break;
+
         case SmTypeCons:
             fprintf(f, "(");
 
