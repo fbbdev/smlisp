@@ -1,11 +1,13 @@
 #pragma once
 
 #include "heap.h"
+#include "scope.h"
 
 #include <stdint.h>
 
 typedef enum Type {
     Cons,
+    Scope,
     String
 } Type;
 
@@ -16,6 +18,7 @@ typedef struct SmHeapObject {
 
     union Data {
         SmCons cons;
+        SmScope scope;
         char string;
     } data;
     uint8_t mem[];

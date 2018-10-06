@@ -61,7 +61,7 @@ $(TESTDIR)/% : $(SRCDIR)/%_test.c $(BUILDDIR)/libsmlisp.a | $(DIRS)
 lib: $(BUILDDIR)/libsmlisp.a
 bin: $(BUILDDIR)/smlisp
 
-test: clean_test $(TESTS)
+test: $(TESTS) | $(DIRS)
 	@echo Starting test suite
 	@$(RM) $(TESTLOG)
 	@for test in $^; do \

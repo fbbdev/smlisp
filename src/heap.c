@@ -25,8 +25,12 @@ static inline Object* object_new(Object* next, Type type, size_t size) {
 }
 
 static inline Object* object_from_pointer(Type type, void const* ptr) {
-    return (Object*) (((uint8_t*) ptr) - offsetof(Object, data) -
-        ((type == Cons) ? offsetof(union Data, cons) : offsetof(union Data, string)));
+    const size_t offset =
+        (type == Cons) ? offsetof(union Data, cons)
+      : (type == Scope) ? offsetof(union Data, scope)
+      : offsetof(union Data, string);
+
+    return (Object*) (((uint8_t*) ptr) - offsetof(Object, data) - offset);
 }
 
 static inline Root* root_from_value(SmValue* value) {
@@ -40,9 +44,20 @@ static void gc_mark(Object* obj) {
         if (obj->type == Cons) {
             if (sm_value_is_cons(obj->data.cons.car) && obj->data.cons.car.data.cons)
                 gc_mark(object_from_pointer(Cons, obj->data.cons.car.data.cons));
+            else if (sm_value_is_string(obj->data.cons.car) && obj->data.cons.car.data.string.buffer)
+                gc_mark(object_from_pointer(String, obj->data.cons.car.data.string.buffer));
 
             if (sm_value_is_cons(obj->data.cons.cdr) && obj->data.cons.cdr.data.cons)
                 obj = object_from_pointer(Cons, obj->data.cons.cdr.data.cons);
+            else if (sm_value_is_string(obj->data.cons.cdr) && obj->data.cons.cdr.data.string.buffer)
+                gc_mark(object_from_pointer(String, obj->data.cons.cdr.data.string.buffer));
+        } else if (obj->type == Scope) {
+            for (SmVariable* var = sm_scope_first(&obj->data.scope); var; var = sm_scope_next(&obj->data.scope, var)) {
+                if (sm_value_is_cons(var->value) && var->value.data.cons)
+                    gc_mark(object_from_pointer(Cons, var->value.data.cons));
+                if (sm_value_is_string(var->value) && var->value.data.string.buffer)
+                    gc_mark(object_from_pointer(String, var->value.data.string.buffer));
+            }
         }
     }
 }
@@ -77,6 +92,19 @@ SmCons* sm_heap_alloc_cons(SmHeap* heap, SmStackFrame const* frame) {
     ++heap->gc.object_count;
 
     return &obj->data.cons;
+}
+
+SmScope* sm_heap_alloc_scope(SmHeap* heap, SmStackFrame const* frame) {
+    if (should_collect(&heap->gc))
+        sm_heap_gc(heap, frame);
+
+    Object* obj = object_new(heap->objects, Cons, 0);
+    heap->objects = obj;
+
+    ++heap->gc.object_count;
+
+    obj->data.scope = sm_scope();
+    return &obj->data.scope;
 }
 
 char* sm_heap_alloc_string(SmHeap* heap, SmStackFrame const* frame, size_t length) {

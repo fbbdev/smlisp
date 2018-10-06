@@ -35,6 +35,7 @@ inline size_t sm_heap_size(SmHeap const* heap) {
 }
 
 SmCons* sm_heap_alloc_cons(SmHeap* heap, SmStackFrame const* frame);
+SmScope* sm_heap_alloc_scope(SmHeap* heap, SmStackFrame const* frame);
 char* sm_heap_alloc_string(SmHeap* heap, SmStackFrame const* frame, size_t length);
 
 SmValue* sm_heap_root(SmHeap* heap);
