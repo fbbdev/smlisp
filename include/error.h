@@ -14,6 +14,7 @@ typedef enum SmErrorCode {
     SmErrorUndefinedVariable,
     SmErrorSyntaxError,
     SmErrorLexicalError,
+    SmErrorInvalidLiteral,
     SmErrorGeneric,
 
     SmErrorCount

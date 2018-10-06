@@ -19,6 +19,7 @@ static char const* error_codes[SmErrorCount] = {
     "UndefinedVariable",
     "SyntaxError",
     "LexicalError",
+    "InvalidLiteral",
     "Generic"
 };
 

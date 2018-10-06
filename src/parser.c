@@ -189,7 +189,7 @@ static Token lexer_next(SmParser* parser) {
                 break;
             }
 
-        default: // Enlarge token until next whitespace, decide type later
+        default: // Enlarge token until next boundary, decide type later
             while (parser->source.length > 0 && !token_boundary(*parser->source.data)) {
                 if (*parser->source.data == '|') {
                     tok.type = Truncated;
@@ -244,12 +244,12 @@ static SmError parse_integer(SmParser const* parser, SmContext const* ctx, Token
 
     for (*ret = 0; str.length > 0; utf8_incr(&str)) {
         if (INT64_MAX/10 < *ret)
-            return parser_error(parser, tok, ctx, SmErrorGeneric, "integer literal overflow");
+            return parser_error(parser, tok, ctx, SmErrorInvalidLiteral, "integer literal overflow");
 
         *ret *= 10;
 
         if (INT64_MAX - *ret < *str.data - '0')
-            return parser_error(parser, tok, ctx, SmErrorGeneric, "integer literal overflow");
+            return parser_error(parser, tok, ctx, SmErrorInvalidLiteral, "integer literal overflow");
 
         *ret += *str.data - '0';
     }
@@ -281,7 +281,7 @@ static SmError parse_float(SmParser const* parser, SmContext const* ctx, Token t
         exp -= dot;
 
         if (isinf(*ret))
-            return parser_error(parser, tok, ctx, SmErrorGeneric, "float significand overflow");
+            return parser_error(parser, tok, ctx, SmErrorInvalidLiteral, "float significand overflow");
     }
 
     if (str.length > 0 && *ret != 0.0) {
@@ -291,7 +291,7 @@ static SmError parse_float(SmParser const* parser, SmContext const* ctx, Token t
         int64_t e = 0;
         tok.source = str;
         if (!sm_is_ok(parse_integer(parser, ctx, tok, &e)))
-            return parser_error(parser, tok, ctx, SmErrorGeneric, "float exponent overflow");
+            return parser_error(parser, tok, ctx, SmErrorInvalidLiteral, "float exponent overflow");
 
         exp += e;
     }
@@ -305,7 +305,7 @@ static SmError parse_float(SmParser const* parser, SmContext const* ctx, Token t
             *ret *= fac;
 
         if (isinf(*ret) || *ret == 0.0)
-            return parser_error(parser, tok, ctx, SmErrorGeneric, "float exponent overflow");
+            return parser_error(parser, tok, ctx, SmErrorInvalidLiteral, "float exponent overflow");
     }
 
     if (sign)
