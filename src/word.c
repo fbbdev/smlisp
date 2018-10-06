@@ -17,10 +17,15 @@ SmWord sm_word(SmWordSet* set, SmString str) {
     SmWord word = (SmWord) sm_rbtree_find(set, &str);
 
     if (!word) {
-        char* buf = sm_aligned_alloc(16, str.length*sizeof(char));
-        strncpy(buf, str.data, str.length);
+        if (str.data && str.length > 0) {
+            char* buf = sm_aligned_alloc(16, str.length*sizeof(char));
+            strncpy(buf, str.data, str.length);
 
-        str.data = buf;
+            str.data = buf;
+        } else {
+            str.data = NULL;
+            str.length = 0;
+        }
 
         word = (SmWord) sm_rbtree_insert(set, &str);
     }
