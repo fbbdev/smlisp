@@ -17,6 +17,7 @@ typedef enum TokenType {
     Integer,
     Float,
     Word,
+    String,
     LParen,
     RParen,
     Quote,
@@ -94,7 +95,7 @@ static size_t consume_whitespace(SmParser* parser) {
 }
 
 static inline bool token_boundary(char c) {
-    return isspace(c) || c == '\'' || c == '(' || c == ')';
+    return isspace(c) || c == '\'' || c == '"' || c == '(' || c == ')';
 }
 
 static bool valid_integer(SmString str) {
@@ -180,6 +181,23 @@ static Token lexer_next(SmParser* parser) {
         case '\'':
             tok.type = Quote;
             tok.source.length = consume(parser, 1);
+            break;
+
+        case '"':
+            tok.type = Truncated;
+            tok.source.length += consume(parser, 1);
+
+            while (parser->source.length > 0 && *parser->source.data != '"') {
+                tok.source.length += consume(parser, 1);
+                if (*parser->source.data == '\\')
+                    // Do not check source.length, this will return 0 at end of input
+                    tok.source.length += consume(parser, 1);
+            }
+
+            if (parser->source.length > 0) {
+                tok.type = String;
+                tok.source.length += consume(parser, 1);
+            }
             break;
 
         case '.':
@@ -336,6 +354,65 @@ static SmError parse_word(SmParser const* parser, SmContext* ctx, Token tok, SmW
     return sm_ok;
 }
 
+static SmError parse_string(SmParser const* parser, SmContext* ctx, Token tok, SmString* ret) {
+    *ret = (SmString){ NULL, 0 };
+
+    for (size_t i = 1; i < (tok.source.length - 1); ++i) {
+        ++ret->length;
+        if (tok.source.data[i] == '\\') // Count escapes as one
+            ++i;
+    }
+
+    if (ret->length == 0)
+        return sm_ok;
+
+    char* buf = sm_heap_alloc_string(&ctx->heap, ctx->frame, ret->length);
+    ret->data = buf;
+
+    for (size_t i = 1; i < (tok.source.length - 1); ++i) {
+        if (tok.source.data[i] != '\\') {
+            *buf++ = tok.source.data[i];
+        } else {
+            // The token is valid, so there must be another character
+            switch (tok.source.data[++i]) {
+                case '\\':
+                    *buf++ = '\\';
+                    break;
+                case '\"':
+                    *buf++ = '\"';
+                    break;
+                case 'n':
+                    *buf++ = '\n';
+                    break;
+                case 'r':
+                    *buf++ = '\r';
+                    break;
+                case 'b':
+                    *buf++ = '\b';
+                    break;
+                case 't':
+                    *buf++ = '\t';
+                    break;
+                case 'f':
+                    *buf++ = '\f';
+                    break;
+                case 'a':
+                    *buf++ = '\a';
+                    break;
+                case 'v':
+                    *buf++ = '\v';
+                    break;
+                default:
+                    ret->data = NULL;
+                    ret->length = 0;
+                    return parser_error(parser, tok, ctx, SmErrorInvalidLiteral, "invalid escape sequence in string literal");
+            }
+        }
+    }
+
+    return sm_ok;
+}
+
 // Paser functions
 bool sm_parser_finished(SmParser* parser) {
     consume_whitespace(parser);
@@ -378,6 +455,11 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
         case Word:
             *form = sm_value_word(NULL);
             err = parse_word(parser, ctx, tok, &form->data.word);
+            break;
+
+        case String:
+            *form = sm_value_string((SmString){ NULL, 0 });
+            err = parse_string(parser, ctx, tok, &form->data.string);
             break;
 
         case LParen: {
