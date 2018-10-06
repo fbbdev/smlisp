@@ -139,22 +139,22 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
     for (Root* r = heap->roots; r; r = r->next) {
         if (sm_value_is_cons(r->value) && r->value.data.cons)
             gc_mark(object_from_pointer(Cons, r->value.data.cons));
-        else if (sm_value_is_string(r->value) && r->value.data.string.data)
-            gc_mark(object_from_pointer(String, r->value.data.string.data));
+        else if (sm_value_is_string(r->value) && r->value.data.string.buffer)
+            gc_mark(object_from_pointer(String, r->value.data.string.buffer));
     }
 
     // Walk stack and mark live objects
     for (; frame; frame = frame->parent) {
         if (sm_value_is_cons(frame->fn) && frame->fn.data.cons)
             gc_mark(object_from_pointer(Cons, frame->fn.data.cons));
-        else if (sm_value_is_string(frame->fn) && frame->fn.data.string.data)
-            gc_mark(object_from_pointer(String, frame->fn.data.string.data));
+        else if (sm_value_is_string(frame->fn) && frame->fn.data.string.buffer)
+            gc_mark(object_from_pointer(String, frame->fn.data.string.buffer));
 
         for (SmVariable* var = sm_scope_first(&frame->scope); var; var = sm_scope_next(&frame->scope, var)) {
             if (sm_value_is_cons(var->value) && var->value.data.cons)
                 gc_mark(object_from_pointer(Cons, var->value.data.cons));
-            if (sm_value_is_string(var->value) && var->value.data.string.data)
-                gc_mark(object_from_pointer(String, var->value.data.string.data));
+            if (sm_value_is_string(var->value) && var->value.data.string.buffer)
+                gc_mark(object_from_pointer(String, var->value.data.string.buffer));
         }
     }
 

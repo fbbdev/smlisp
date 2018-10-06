@@ -31,7 +31,10 @@ typedef struct SmValue {
     union {
         SmNumber number;
         SmWord word;
-        SmString string;
+        struct {
+            char* buffer;
+            SmString view;
+        } string;
         struct SmCons* cons;
     } data;
 } SmValue;
@@ -54,8 +57,8 @@ inline SmValue sm_value_word(SmWord word) {
     return (SmValue){ SmTypeWord, 0, { .word = word } };
 }
 
-inline SmValue sm_value_string(SmString string) {
-    return (SmValue){ SmTypeString, 0, { .string = string } };
+inline SmValue sm_value_string(SmString view, char* buffer) {
+    return (SmValue){ SmTypeString, 0, { .string = { buffer, view } } };
 }
 
 inline SmValue sm_value_cons(SmCons* cons) {

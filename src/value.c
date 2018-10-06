@@ -11,7 +11,7 @@
 extern inline SmValue sm_value_nil();
 extern inline SmValue sm_value_number(SmNumber number);
 extern inline SmValue sm_value_word(SmWord word);
-extern inline SmValue sm_value_string(SmString string);
+extern inline SmValue sm_value_string(SmString view, char* buffer);
 extern inline SmValue sm_value_cons(SmCons* cons);
 extern inline bool sm_value_is_nil(SmValue value);
 extern inline bool sm_value_is_number(SmValue value);
@@ -110,7 +110,7 @@ void sm_print_value(FILE* f, SmValue value) {
 
         case SmTypeString:
             fprintf(f, "\"");
-            for (char const *p = value.data.string.data, *end = p + value.data.string.length;
+            for (char const *p = value.data.string.view.data, *end = p + value.data.string.view.length;
                  p != end; ++p)
             {
                 char const* esc = escape_char(*p);

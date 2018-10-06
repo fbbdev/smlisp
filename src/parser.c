@@ -335,7 +335,7 @@ static SmError parse_float(SmParser const* parser, SmContext const* ctx, Token t
 static SmError parse_word(SmParser const* parser, SmContext* ctx, Token tok, SmWord* ret) {
     sm_unused(parser);
 
-    char* buf = sm_aligned_alloc(16, tok.source.length);
+    char* buf = sm_aligned_alloc(16, tok.source.length*sizeof(char));
     char* end = buf + tok.source.length;
 
     strncpy(buf, tok.source.data, tok.source.length);
@@ -357,58 +357,56 @@ static SmError parse_word(SmParser const* parser, SmContext* ctx, Token tok, SmW
 static SmError parse_string(SmParser const* parser, SmContext* ctx, Token tok, SmString* ret) {
     *ret = (SmString){ NULL, 0 };
 
-    for (size_t i = 1; i < (tok.source.length - 1); ++i) {
-        ++ret->length;
-        if (tok.source.data[i] == '\\') // Count escapes as one
-            ++i;
-    }
-
-    if (ret->length == 0)
+    if (tok.source.length <= 2)
         return sm_ok;
 
-    char* buf = sm_heap_alloc_string(&ctx->heap, ctx->frame, ret->length);
-    ret->data = buf;
+    char* buf = sm_aligned_alloc(16, (tok.source.length - 2)*sizeof(char));
+    char* end = buf + tok.source.length - 2;
 
-    for (size_t i = 1; i < (tok.source.length - 1); ++i) {
-        if (tok.source.data[i] != '\\') {
-            *buf++ = tok.source.data[i];
-        } else {
-            // The token is valid, so there must be another character
-            switch (tok.source.data[++i]) {
+    strncpy(buf, tok.source.data + 1, tok.source.length - 2);
+
+    for (char* p = buf; p < end; ++p) {
+        if (*p == '\\') {
+            memmove(p, p + 1, end - p - 1);
+            --end;
+
+            switch (*p) {
                 case '\\':
-                    *buf++ = '\\';
+                    *p = '\\';
                     break;
                 case '\"':
-                    *buf++ = '\"';
+                    *p = '\"';
                     break;
                 case 'n':
-                    *buf++ = '\n';
+                    *p = '\n';
                     break;
                 case 'r':
-                    *buf++ = '\r';
+                    *p = '\r';
                     break;
                 case 'b':
-                    *buf++ = '\b';
+                    *p = '\b';
                     break;
                 case 't':
-                    *buf++ = '\t';
+                    *p = '\t';
                     break;
                 case 'f':
-                    *buf++ = '\f';
+                    *p = '\f';
                     break;
                 case 'a':
-                    *buf++ = '\a';
+                    *p = '\a';
                     break;
                 case 'v':
-                    *buf++ = '\v';
+                    *p = '\v';
                     break;
                 default:
-                    ret->data = NULL;
-                    ret->length = 0;
+                    free(buf);
                     return parser_error(parser, tok, ctx, SmErrorInvalidLiteral, "invalid escape sequence in string literal");
             }
         }
     }
+
+    *ret = sm_word_str(sm_word(&ctx->words, (SmString){ buf, end - buf }));
+    free(buf);
 
     return sm_ok;
 }
@@ -458,8 +456,8 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
             break;
 
         case String:
-            *form = sm_value_string((SmString){ NULL, 0 });
-            err = parse_string(parser, ctx, tok, &form->data.string);
+            *form = sm_value_string((SmString){ NULL, 0 }, NULL);
+            err = parse_string(parser, ctx, tok, &form->data.string.view);
             break;
 
         case LParen: {
