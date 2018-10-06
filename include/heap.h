@@ -1,6 +1,7 @@
 #pragma once
 
 #include "stack.h"
+#include "util.h"
 #include "value.h"
 
 #include <stdint.h>
@@ -33,7 +34,8 @@ inline size_t sm_heap_size(SmHeap const* heap) {
     return heap->gc.object_count;
 }
 
-SmCons* sm_heap_alloc(SmHeap* heap, SmStackFrame const* frame);
+SmCons* sm_heap_alloc_cons(SmHeap* heap, SmStackFrame const* frame);
+char* sm_heap_alloc_string(SmHeap* heap, SmStackFrame const* frame, size_t length);
 
 SmValue* sm_heap_root(SmHeap* heap);
 void sm_heap_root_drop(SmHeap* heap, SmStackFrame const* frame, SmValue* root);

@@ -15,16 +15,18 @@ static inline bool should_collect(struct SmGCStatus const* gc) {
            (gc->unref_count >= gc->config.unref_threshold);
 }
 
-static inline Object* object_new(Object* next) {
-    Object* obj = sm_aligned_alloc(sm_alignof(Object), sizeof(Object));
+static inline Object* object_new(Object* next, Type type, size_t size) {
+    size += offsetof(Object, data);
 
-    *obj = (Object){ next, false, { sm_value_nil(), sm_value_nil() } };
+    Object* obj = sm_aligned_alloc(sm_alignof(Object), (size > sizeof(Object)) ? size : sizeof(Object));
+    *obj = (Object){ next, type, false, { .cons = { sm_value_nil(), sm_value_nil() } } };
 
     return obj;
 }
 
-static inline Object* object_from_cons(SmCons* cons) {
-    return (Object*) (((uint8_t*) cons) - offsetof(Object, cons));
+static inline Object* object_from_pointer(Type type, void const* ptr) {
+    return (Object*) (((uint8_t*) ptr) - offsetof(Object, data) -
+        ((type == Cons) ? offsetof(union Data, cons) : offsetof(union Data, string)));
 }
 
 static inline Root* root_from_value(SmValue* value) {
@@ -35,11 +37,13 @@ static void gc_mark(Object* obj) {
     while (!obj->marked) {
         obj->marked = true;
 
-        if (sm_value_is_cons(obj->cons.car) && obj->cons.car.data.cons)
-            gc_mark(object_from_cons(obj->cons.car.data.cons));
+        if (obj->type == Cons) {
+            if (sm_value_is_cons(obj->data.cons.car) && obj->data.cons.car.data.cons)
+                gc_mark(object_from_pointer(Cons, obj->data.cons.car.data.cons));
 
-        if (sm_value_is_cons(obj->cons.cdr) && obj->cons.cdr.data.cons)
-            obj = object_from_cons(obj->cons.cdr.data.cons);
+            if (sm_value_is_cons(obj->data.cons.cdr) && obj->data.cons.cdr.data.cons)
+                obj = object_from_pointer(Cons, obj->data.cons.cdr.data.cons);
+        }
     }
 }
 
@@ -63,16 +67,29 @@ void sm_heap_drop(SmHeap* heap) {
     heap->gc.object_threshold = heap->gc.config.object_threshold;
 }
 
-SmCons* sm_heap_alloc(SmHeap* heap, SmStackFrame const* frame) {
+SmCons* sm_heap_alloc_cons(SmHeap* heap, SmStackFrame const* frame) {
     if (should_collect(&heap->gc))
         sm_heap_gc(heap, frame);
 
-    Object* obj = object_new(heap->objects);
+    Object* obj = object_new(heap->objects, Cons, 0);
     heap->objects = obj;
 
     ++heap->gc.object_count;
 
-    return &obj->cons;
+    return &obj->data.cons;
+}
+
+char* sm_heap_alloc_string(SmHeap* heap, SmStackFrame const* frame, size_t length) {
+    if (should_collect(&heap->gc))
+        sm_heap_gc(heap, frame);
+
+    Object* obj = object_new(heap->objects, String, sizeof(char)*length);
+    heap->objects = obj;
+
+    ++heap->gc.object_count;
+
+    obj->data.string = '\0';
+    return &obj->data.string;
 }
 
 SmValue* sm_heap_root(SmHeap* heap) {
@@ -121,17 +138,23 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
     // Mark roots
     for (Root* r = heap->roots; r; r = r->next) {
         if (sm_value_is_cons(r->value) && r->value.data.cons)
-            gc_mark(object_from_cons(r->value.data.cons));
+            gc_mark(object_from_pointer(Cons, r->value.data.cons));
+        else if (sm_value_is_string(r->value) && r->value.data.string.data)
+            gc_mark(object_from_pointer(String, r->value.data.string.data));
     }
 
     // Walk stack and mark live objects
     for (; frame; frame = frame->parent) {
         if (sm_value_is_cons(frame->fn) && frame->fn.data.cons)
-            gc_mark(object_from_cons(frame->fn.data.cons));
+            gc_mark(object_from_pointer(Cons, frame->fn.data.cons));
+        else if (sm_value_is_string(frame->fn) && frame->fn.data.string.data)
+            gc_mark(object_from_pointer(String, frame->fn.data.string.data));
 
         for (SmVariable* var = sm_scope_first(&frame->scope); var; var = sm_scope_next(&frame->scope, var)) {
             if (sm_value_is_cons(var->value) && var->value.data.cons)
-                gc_mark(object_from_cons(var->value.data.cons));
+                gc_mark(object_from_pointer(Cons, var->value.data.cons));
+            if (sm_value_is_string(var->value) && var->value.data.string.data)
+                gc_mark(object_from_pointer(String, var->value.data.string.data));
         }
     }
 

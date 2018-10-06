@@ -116,7 +116,7 @@ void build_list_v(SmContext* ctx, SmValue* ret, va_list* args) {
         return;
     }
 
-    SmCons* cons = sm_heap_alloc(&ctx->heap, ctx->frame);
+    SmCons* cons = sm_heap_alloc_cons(&ctx->heap, ctx->frame);
     *ret = sm_value_cons(cons); // Save head
 
     if (op == SmBuildCar)
@@ -129,7 +129,7 @@ void build_list_v(SmContext* ctx, SmValue* ret, va_list* args) {
     for (op = va_arg(*args, SmBuildOp); op != SmBuildCdr && op != SmBuildEnd; op = va_arg(*args, SmBuildOp))
     {
         // Continue list
-        cons->cdr = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
+        cons->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
         cons = sm_list_next(cons);
 
         if (op == SmBuildCar)

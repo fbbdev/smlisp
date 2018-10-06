@@ -130,7 +130,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
     *dot_root = *ret;
 
     // Init output list
-    *ret = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
+    *ret = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
     SmCons* out = ret->data.cons;
 
     SmError err = sm_ok;
@@ -159,7 +159,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
         }
 
         if (arg) {
-            out->cdr = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
+            out->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
             out = out->cdr.data.cons;
         }
     }
@@ -276,7 +276,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
 
         // ...unless there are more args to take, in which case we build a list
         if (arg) {
-            var->value = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
+            var->value = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
             SmCons* rest = var->value.data.cons;
 
             while (arg) {
@@ -297,7 +297,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
                 }
 
                 if (arg) {
-                    rest->cdr = sm_value_cons(sm_heap_alloc(&ctx->heap, ctx->frame));
+                    rest->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
                     rest = rest->cdr.data.cons;
                 }
             }

@@ -343,7 +343,7 @@ SmError SM_BUILTIN_SYMBOL(lambda)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_is_ok(err))
         return err;
 
-    SmCons* lambda = sm_heap_alloc(&ctx->heap, ctx->frame);
+    SmCons* lambda = sm_heap_alloc_cons(&ctx->heap, ctx->frame);
     *ret = sm_value_cons(lambda);
 
     lambda->car = sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda")));
@@ -409,7 +409,7 @@ SmError SM_BUILTIN_SYMBOL(cdr)(SmContext* ctx, SmValue args, SmValue* ret) {
         return_nil(err);
 
     if (sm_value_is_quoted(*ret)) {
-        SmCons* cons = sm_heap_alloc(&ctx->heap, ctx->frame);
+        SmCons* cons = sm_heap_alloc_cons(&ctx->heap, ctx->frame);
         cons->car = sm_value_unquote(*ret, 1);
         return_value(sm_value_cons(cons));
     }
