@@ -195,6 +195,8 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
         if (!obj->marked) {
             *objp = obj->next; // Update list
             --heap->gc.object_count;
+            if (obj->type == Scope)
+                sm_scope_drop(&obj->data.scope);
             free(obj);
         } else {
             obj->marked = false;
