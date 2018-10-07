@@ -58,6 +58,9 @@ static void gc_mark(Object* obj) {
                 if (sm_value_is_string(var->value) && var->value.data.string.buffer)
                     gc_mark(object_from_pointer(String, var->value.data.string.buffer));
             }
+
+            if (obj->data.scope.parent)
+                gc_mark(object_from_pointer(Scope, obj->data.scope.parent));
         }
     }
 }
@@ -103,7 +106,7 @@ SmScope* sm_heap_alloc_scope(SmHeap* heap, SmStackFrame const* frame) {
 
     ++heap->gc.object_count;
 
-    obj->data.scope = sm_scope();
+    obj->data.scope = sm_scope(NULL);
     return &obj->data.scope;
 }
 
@@ -178,11 +181,13 @@ void sm_heap_gc(SmHeap* heap, SmStackFrame const* frame) {
         else if (sm_value_is_string(frame->fn) && frame->fn.data.string.buffer)
             gc_mark(object_from_pointer(String, frame->fn.data.string.buffer));
 
-        for (SmVariable* var = sm_scope_first(&frame->scope); var; var = sm_scope_next(&frame->scope, var)) {
-            if (sm_value_is_cons(var->value) && var->value.data.cons)
-                gc_mark(object_from_pointer(Cons, var->value.data.cons));
-            if (sm_value_is_string(var->value) && var->value.data.string.buffer)
-                gc_mark(object_from_pointer(String, var->value.data.string.buffer));
+        for (SmScope const* scope = &frame->scope; scope; scope = scope->parent) {
+            for (SmVariable* var = sm_scope_first(&frame->scope); var; var = sm_scope_next(&frame->scope, var)) {
+                if (sm_value_is_cons(var->value) && var->value.data.cons)
+                    gc_mark(object_from_pointer(Cons, var->value.data.cons));
+                if (sm_value_is_string(var->value) && var->value.data.string.buffer)
+                    gc_mark(object_from_pointer(String, var->value.data.string.buffer));
+            }
         }
     }
 

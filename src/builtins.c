@@ -7,16 +7,6 @@
 #include <string.h>
 
 // Private helpers
-static SmVariable* scope_lookup(SmStackFrame const* frame, SmSymbol id) {
-    for (; frame; frame = frame->parent) {
-        SmVariable* var = sm_scope_get(&frame->scope, id);
-        if (var)
-            return var;
-    }
-
-    return NULL;
-}
-
 static inline SmError exit_frame_pass_error(SmContext* ctx, SmError err) {
     sm_context_exit_frame(ctx);
     return err;
@@ -108,7 +98,7 @@ SmError SM_BUILTIN_SYMBOL(set)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (str.length == 3 && strncmp(str.data, "nil", 3) == 0)
         return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name"));
 
-    SmVariable* var = scope_lookup(ctx->frame, ret->data.cons->car.data.symbol);
+    SmVariable* var = sm_scope_lookup(&ctx->frame->scope, ret->data.cons->car.data.symbol);
     if (var) {
         var->value = ret->data.cons->cdr.data.cons->car;
     } else {
@@ -145,7 +135,7 @@ SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
         if (!sm_is_ok(err))
             return_nil(err);
 
-        SmVariable* var = scope_lookup(ctx->frame, cons->car.data.symbol);
+        SmVariable* var = sm_scope_lookup(&ctx->frame->scope, cons->car.data.symbol);
         if (var)
             var->value = *ret;
         else

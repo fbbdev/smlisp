@@ -21,7 +21,7 @@ inline SmStackFrame sm_stack_frame(SmStackFrame* parent, SmString name, SmValue 
         parent,
         name,
         fn,
-        sm_scope()
+        sm_scope(parent ? &parent->scope : NULL)
     };
 }
 

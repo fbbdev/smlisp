@@ -5,32 +5,43 @@
 #include "value.h"
 #include "symbol.h"
 
-typedef SmRBTree SmScope;
+typedef struct SmScope {
+    struct SmScope* parent;
+    SmRBTree vars;
+} SmScope;
 
 typedef struct SmVariable {
     SmSymbol id;
     SmValue value;
 } SmVariable;
 
-#define sm_scope_drop sm_rbtree_drop
-#define sm_scope_size sm_rbtree_size
+inline SmScope sm_scope(SmScope* parent) {
+    return (SmScope) {
+        parent,
+        sm_rbtree(sizeof(SmVariable), sm_alignof(SmVariable), sm_symbol_key, sm_key_compare_ptr)
+    };
+}
 
-inline SmScope sm_scope() {
-    return sm_rbtree(sizeof(SmVariable), sm_alignof(SmVariable),
-                     sm_symbol_key, sm_key_compare_ptr);
+inline void sm_scope_drop(SmScope* scope) {
+    scope->parent = NULL;
+    sm_rbtree_drop(&scope->vars);
+}
+
+inline size_t sm_scope_size(SmScope const* scope) {
+    return sm_rbtree_size(&scope->vars);
 }
 
 inline SmVariable* sm_scope_get(SmScope const* scope, SmSymbol id) {
-    return (SmVariable*) sm_rbtree_find_by_key(scope, sm_symbol_key(&id));
+    return (SmVariable*) sm_rbtree_find_by_key(&scope->vars, sm_symbol_key(&id));
 }
 
 inline SmVariable* sm_scope_set(SmScope* scope, SmSymbol id, SmValue value) {
     SmVariable var = { id, value };
-    return (SmVariable*) sm_rbtree_insert(scope, &var);
+    return (SmVariable*) sm_rbtree_insert(&scope->vars, &var);
 }
 
 inline void sm_scope_delete(SmScope* scope, SmSymbol id) {
-    sm_rbtree_erase(scope, sm_rbtree_find_by_key(scope, sm_symbol_key(&id)));
+    sm_rbtree_erase(&scope->vars, sm_rbtree_find_by_key(&scope->vars, sm_symbol_key(&id)));
 }
 
 inline bool sm_scope_is_set(SmScope const* scope, SmSymbol id) {
@@ -38,9 +49,20 @@ inline bool sm_scope_is_set(SmScope const* scope, SmSymbol id) {
 }
 
 inline SmVariable* sm_scope_first(SmScope const* scope) {
-    return (SmVariable*) sm_rbtree_first(scope);
+    return (SmVariable*) sm_rbtree_first(&scope->vars);
 }
 
 inline SmVariable* sm_scope_next(SmScope const* scope, SmVariable* var) {
-    return (SmVariable*) sm_rbtree_next(scope, var);
+    return (SmVariable*) sm_rbtree_next(&scope->vars, var);
+}
+
+inline SmVariable* sm_scope_lookup(SmScope const* scope, SmSymbol id) {
+    SmVariable* var = NULL;
+
+    for (; scope; scope = scope->parent) {
+        if ((var = sm_scope_get(scope, id)))
+            break;
+    }
+
+    return var;
 }

@@ -7,17 +7,6 @@
 // Error message buffer
 static sm_thread_local char err_buf[1024];
 
-// Private helpers
-static SmVariable* scope_lookup(SmStackFrame const* frame, SmSymbol id) {
-    for (; frame; frame = frame->parent) {
-        SmVariable* var = sm_scope_get(&frame->scope, id);
-        if (var)
-            return var;
-    }
-
-    return NULL;
-}
-
 // Eval functions
 SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     // If quoted, just unquote
@@ -66,7 +55,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
         }
 
         // Lookup variable in scope
-        SmVariable* scope_var = scope_lookup(ctx->frame, form.data.symbol);
+        SmVariable* scope_var = sm_scope_lookup(&ctx->frame->scope, form.data.symbol);
         if (scope_var) {
             *ret = scope_var->value;
             return sm_ok;
@@ -118,7 +107,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
             }
         } else {
             // Lookup function as variable in scope
-            SmVariable* scope_var = scope_lookup(ctx->frame, call->car.data.symbol);
+            SmVariable* scope_var = sm_scope_lookup(&ctx->frame->scope, call->car.data.symbol);
             if (!scope_var) {
                 snprintf(err_buf, sizeof(err_buf), "function not found: %.*s", (int) fn_name.length, fn_name.data);
                 sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
