@@ -15,7 +15,7 @@ void sm_register_builtins(SmContext* ctx);
     builtin(set) \
     builtin(setq) \
 \
-    builtin(do) \
+    builtin(progn) \
     builtin(let) \
     builtin(if) \
 \

@@ -152,7 +152,7 @@ SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
 }
 
 
-SmError SM_BUILTIN_SYMBOL(do)(SmContext* ctx, SmValue args, SmValue* ret) {
+SmError SM_BUILTIN_SYMBOL(progn)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_value_is_list(args) || sm_value_is_quoted(args))
         return sm_error(ctx, SmErrorMissingArguments, "do cannot accept a dotted code list");
 
