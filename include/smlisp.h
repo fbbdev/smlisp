@@ -10,6 +10,7 @@
 #include "number.h"
 #include "parser.h"
 #include "rbtree.h"
+#include "scope.h"
 #include "stack.h"
 #include "util.h"
 #include "value.h"
