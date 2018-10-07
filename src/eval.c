@@ -77,7 +77,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     bool inline_fn = true;
     SmValue* fn = NULL;
 
-    if (sm_value_is_symbol(call->car) && sm_value_is_unquoted(call->car)) {
+    if (sm_value_is_symbol(call->car) && !sm_value_is_quoted(call->car)) {
         inline_fn = false;
         fn_name = sm_symbol_str(call->car.data.symbol);
 

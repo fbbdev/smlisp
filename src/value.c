@@ -18,7 +18,6 @@ extern inline bool sm_value_is_number(SmValue value);
 extern inline bool sm_value_is_symbol(SmValue value);
 extern inline bool sm_value_is_string(SmValue value);
 extern inline bool sm_value_is_cons(SmValue value);
-extern inline bool sm_value_is_unquoted(SmValue value);
 extern inline bool sm_value_is_quoted(SmValue value);
 extern inline SmValue sm_value_quote(SmValue value, uint8_t quotes);
 extern inline SmValue sm_value_unquote(SmValue value, uint8_t unquotes);

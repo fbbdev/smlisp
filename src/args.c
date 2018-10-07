@@ -41,7 +41,7 @@ SmArgPattern sm_arg_pattern_from_spec(SmString name, SmValue spec) {
 
     if (sm_value_is_symbol(spec)) {
         pattern.rest.id = spec.data.symbol;
-        pattern.rest.eval = sm_value_is_unquoted(spec);
+        pattern.rest.eval = !sm_value_is_quoted(spec);
         pattern.rest.use = true;
         return pattern;
     }
@@ -55,11 +55,11 @@ SmArgPattern sm_arg_pattern_from_spec(SmString name, SmValue spec) {
 
     for (SmCons* arg = spec.data.cons; arg; ++args, arg = sm_list_next(arg)) {
         args->id = arg->car.data.symbol;
-        args->eval = sm_value_is_unquoted(arg->car);
+        args->eval = !sm_value_is_quoted(arg->car);
 
         if (sm_value_is_symbol(arg->cdr)) {
             pattern.rest.id = arg->cdr.data.symbol;
-            pattern.rest.eval = sm_value_is_unquoted(arg->cdr);
+            pattern.rest.eval = !sm_value_is_quoted(arg->cdr);
             pattern.rest.use = true;
         }
     }
@@ -68,7 +68,7 @@ SmArgPattern sm_arg_pattern_from_spec(SmString name, SmValue spec) {
 }
 
 SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue args, SmValue* ret) {
-    SmCons* arg = (sm_value_is_cons(args) && sm_value_is_unquoted(args)) ? args.data.cons : NULL;
+    SmCons* arg = (sm_value_is_cons(args) && !sm_value_is_quoted(args)) ? args.data.cons : NULL;
     size_t available = sm_list_size(arg);
 
     SmValue dot = arg ? sm_list_dot(arg) : args;
@@ -90,7 +90,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
 
     SmValue final_cdr = *ret;
 
-    if (sm_value_is_list(*ret) && sm_value_is_unquoted(*ret)) {
+    if (sm_value_is_list(*ret) && !sm_value_is_quoted(*ret)) {
         available += sm_list_size(ret->data.cons);
         final_cdr = sm_list_dot(ret->data.cons);
     }
@@ -142,7 +142,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
     SmError err = sm_ok;
     bool into_dot = false;
 
-    if (!arg && sm_value_is_cons(*dot_root) && sm_value_is_unquoted(*dot_root)) {
+    if (!arg && sm_value_is_cons(*dot_root) && !sm_value_is_quoted(*dot_root)) {
         arg = dot_root->data.cons;
         into_dot = true;
     }
@@ -157,7 +157,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
         }
 
         if (!(arg = sm_list_next(arg)) && !into_dot &&
-                sm_value_is_cons(*dot_root) && sm_value_is_unquoted(*dot_root))
+                sm_value_is_cons(*dot_root) && !sm_value_is_quoted(*dot_root))
         {
             // If possible, continue taking arguments from dot part
             arg = dot_root->data.cons;
@@ -182,7 +182,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
 }
 
 SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmScope* scope, SmValue args) {
-    SmCons* arg = (sm_value_is_cons(args) && sm_value_is_unquoted(args)) ? args.data.cons : NULL;
+    SmCons* arg = (sm_value_is_cons(args) && !sm_value_is_quoted(args)) ? args.data.cons : NULL;
     size_t available = sm_list_size(arg);
 
     SmValue dot = arg ? sm_list_dot(arg) : args;
@@ -204,7 +204,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmSco
 
     SmValue final_cdr = *dot_root;
 
-    if (sm_value_is_list(*dot_root) && sm_value_is_unquoted(*dot_root)) {
+    if (sm_value_is_list(*dot_root) && !sm_value_is_quoted(*dot_root)) {
         available += sm_list_size(dot_root->data.cons);
         final_cdr = sm_list_dot(dot_root->data.cons);
     }
@@ -257,7 +257,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmSco
     SmError err = sm_ok;
     bool into_dot = false;
 
-    if (!arg && sm_value_is_cons(*dot_root) && sm_value_is_unquoted(*dot_root)) {
+    if (!arg && sm_value_is_cons(*dot_root) && !sm_value_is_quoted(*dot_root)) {
         arg = dot_root->data.cons;
         into_dot = true;
     }
@@ -275,7 +275,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmSco
         }
 
         if (!(arg = sm_list_next(arg)) && !into_dot &&
-                sm_value_is_cons(*dot_root) && sm_value_is_unquoted(*dot_root))
+                sm_value_is_cons(*dot_root) && !sm_value_is_quoted(*dot_root))
         {
             // If possible, continue taking arguments from dot part
             arg = dot_root->data.cons;
@@ -302,7 +302,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmSco
                 }
 
                 if (!(arg = sm_list_next(arg)) && !into_dot &&
-                        sm_value_is_cons(*dot_root) && sm_value_is_unquoted(*dot_root))
+                        sm_value_is_cons(*dot_root) && !sm_value_is_quoted(*dot_root))
                 {
                     // If possible, continue taking arguments from dot part
                     arg = dot_root->data.cons;

@@ -102,10 +102,6 @@ inline bool sm_value_is_function(SmValue value) {
     return value.type == SmTypeFunction;
 }
 
-inline bool sm_value_is_unquoted(SmValue value) {
-    return value.quotes == 0;
-}
-
 inline bool sm_value_is_quoted(SmValue value) {
     return value.quotes != 0;
 }
