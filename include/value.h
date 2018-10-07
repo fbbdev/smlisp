@@ -59,6 +59,7 @@ inline SmValue sm_value_number(SmNumber number) {
 }
 
 inline SmValue sm_value_symbol(SmSymbol symbol) {
+    sm_assert(symbol != NULL);
     return (SmValue){ SmTypeSymbol, 0, { .symbol = symbol } };
 }
 

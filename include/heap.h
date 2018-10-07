@@ -1,6 +1,5 @@
 #pragma once
 
-#include "scope.h"
 #include "util.h"
 #include "value.h"
 
@@ -35,13 +34,14 @@ inline size_t sm_heap_size(SmHeap const* heap) {
 }
 
 SmCons* sm_heap_alloc_cons(SmHeap* heap, struct SmContext const* ctx);
-SmScope* sm_heap_alloc_scope(SmHeap* heap, struct SmContext const* ctx, SmScope* parent);
+struct SmScope* sm_heap_alloc_scope(SmHeap* heap, struct SmContext const* ctx, struct SmScope* parent);
 char* sm_heap_alloc_string(SmHeap* heap, struct SmContext const* ctx, size_t length);
+struct SmFunction* sm_heap_alloc_function(SmHeap* heap, struct SmContext const* ctx);
 
 SmValue* sm_heap_root_value(SmHeap* heap);
-SmScope** sm_heap_root_scope(SmHeap* heap);
+struct SmScope** sm_heap_root_scope(SmHeap* heap);
 void sm_heap_root_value_drop(SmHeap* heap, struct SmContext const* ctx, SmValue* root);
-void sm_heap_root_scope_drop(SmHeap* heap, struct SmContext const* ctx, SmScope** root);
+void sm_heap_root_scope_drop(SmHeap* heap, struct SmContext const* ctx, struct SmScope** root);
 
 void sm_heap_unref(SmHeap* heap, struct SmContext const* ctx, uint8_t count);
 

@@ -2,14 +2,17 @@
 
 #include "heap.h"
 #include "scope.h"
+#include "function.h"
 
 #include <stdint.h>
 
 typedef enum Type {
     Cons,
-    Value = Cons,
     Scope,
-    String
+    String,
+    Function,
+
+    Value = Cons
 } Type;
 
 typedef struct SmHeapObject {
@@ -21,6 +24,7 @@ typedef struct SmHeapObject {
         SmCons cons;
         SmScope scope;
         char string;
+        SmFunction function;
     } data;
 
     uint8_t mem[];

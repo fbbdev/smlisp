@@ -29,7 +29,8 @@ static inline Object* object_from_pointer(Type type, void const* ptr) {
     const size_t offset =
         (type == Cons) ? offsetof(union Data, cons)
       : (type == Scope) ? offsetof(union Data, scope)
-      : offsetof(union Data, string);
+      : (type == String) ? offsetof(union Data, string)
+      : offsetof(union Data, function);
 
     return (Object*) (((uint8_t*) ptr) - offsetof(Object, data) - offset);
 }
@@ -50,6 +51,8 @@ static inline void gc_mark_value(SmValue value) {
         gc_mark(object_from_pointer(Cons, value.data.cons));
     else if (sm_value_is_string(value) && value.data.string.buffer)
         gc_mark(object_from_pointer(String, value.data.string.buffer));
+    else if (sm_value_is_function(value) && value.data.function)
+        gc_mark(object_from_pointer(Function, value.data.function));
 }
 
 static void gc_mark(Object* obj) {
@@ -69,6 +72,12 @@ static void gc_mark(Object* obj) {
 
             if (obj->data.scope.parent)
                 gc_mark(object_from_pointer(Scope, obj->data.scope.parent));
+        } else if (obj->type == Function) {
+            if (obj->data.function.capture)
+                gc_mark(object_from_pointer(Scope, obj->data.function.capture));
+
+            if (obj->data.function.progn)
+                obj = object_from_pointer(Cons, obj->data.function.progn);
         }
     }
 }
@@ -130,6 +139,22 @@ char* sm_heap_alloc_string(SmHeap* heap, SmContext const* ctx, size_t length) {
     obj->data.string = '\0';
     return &obj->data.string;
 }
+
+SmFunction* sm_heap_alloc_function(SmHeap* heap, SmContext const* ctx) {
+    if (should_collect(&heap->gc))
+        sm_heap_gc(heap, ctx);
+
+    Object* obj = object_new(heap->objects, Function, 0);
+    heap->objects = obj;
+
+    ++heap->gc.object_count;
+
+    obj->data.function = (SmFunction){
+        { { NULL, 0 }, NULL, 0, { NULL, false, false} }, NULL, NULL
+    };
+    return &obj->data.function;
+}
+
 
 SmValue* sm_heap_root_value(SmHeap* heap) {
     Root* r = sm_aligned_alloc(sm_alignof(Root), sizeof(Root));

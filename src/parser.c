@@ -450,10 +450,12 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
             err = parse_float(parser, ctx, tok, &form->data.number.value.f);
             break;
 
-        case Symbol:
-            *form = sm_value_symbol(NULL);
-            err = parse_symbol(parser, ctx, tok, &form->data.symbol);
+        case Symbol: {
+            SmSymbol symbol = NULL;
+            err = parse_symbol(parser, ctx, tok, &symbol);
+            *form = sm_value_symbol(symbol);
             break;
+        }
 
         case String:
             *form = sm_value_string((SmString){ NULL, 0 }, NULL);

@@ -1,4 +1,5 @@
 #include "context.h"
+#include "function.h"
 #include "parser.h"
 #include "util.h"
 #include "value.h"
@@ -13,11 +14,13 @@ extern inline SmValue sm_value_number(SmNumber number);
 extern inline SmValue sm_value_symbol(SmSymbol symbol);
 extern inline SmValue sm_value_string(SmString view, char* buffer);
 extern inline SmValue sm_value_cons(SmCons* cons);
+extern inline SmValue sm_value_function(SmFunction* function);
 extern inline bool sm_value_is_nil(SmValue value);
 extern inline bool sm_value_is_number(SmValue value);
 extern inline bool sm_value_is_symbol(SmValue value);
 extern inline bool sm_value_is_string(SmValue value);
 extern inline bool sm_value_is_cons(SmValue value);
+extern inline bool sm_value_is_function(SmValue value);
 extern inline bool sm_value_is_quoted(SmValue value);
 extern inline SmValue sm_value_quote(SmValue value, uint8_t quotes);
 extern inline SmValue sm_value_unquote(SmValue value, uint8_t unquotes);
@@ -144,7 +147,40 @@ void sm_print_value(FILE* f, SmValue value) {
             break;
 
         case SmTypeFunction:
-            fprintf(f, "; function");
+            fprintf(f, "(lambda ");
+            if (value.data.function->args.count > 0 || !value.data.function->args.rest.use)
+                fprintf(f, "(");
+
+            if (value.data.function->args.count > 0) {
+                sm_print_value(f, sm_value_quote(
+                    sm_value_symbol(value.data.function->args.args[0].id),
+                    !value.data.function->args.args[0].eval));
+
+                for (size_t i = 1; i < value.data.function->args.count; ++i) {
+                    fprintf(f, " ");
+                    sm_print_value(f, sm_value_quote(
+                        sm_value_symbol(value.data.function->args.args[i].id),
+                        !value.data.function->args.args[i].eval));
+                }
+
+                if (value.data.function->args.rest.use)
+                    fprintf(f, " . ");
+            }
+
+            if (value.data.function->args.rest.use)
+                sm_print_value(f, sm_value_quote(
+                    sm_value_symbol(value.data.function->args.rest.id),
+                    !value.data.function->args.rest.eval));
+
+            if (value.data.function->args.count > 0 || !value.data.function->args.rest.use)
+                fprintf(f, ")");
+
+            for (SmCons* cons = value.data.function->progn; cons; cons = sm_list_next(cons)) {
+                fprintf(f, " ");
+                sm_print_value(f, cons->car);
+            }
+
+            fprintf(f, ")");
             break;
 
         default:

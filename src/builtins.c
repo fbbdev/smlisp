@@ -1,6 +1,7 @@
 #include "args.h"
 #include "builtins.h"
 #include "eval.h"
+#include "function.h"
 #include "number.h"
 
 #include <stdio.h>
@@ -71,8 +72,11 @@ SmError SM_BUILTIN_SYMBOL(print)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(set)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { sm_string_from_cstring("set"), pargs, 2, { NULL, false, false } };
+    static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "str", 3 },
+        pargs, 2, { NULL, false, false }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -83,7 +87,7 @@ SmError SM_BUILTIN_SYMBOL(set)(SmContext* ctx, SmValue args, SmValue* ret) {
 
     SmString str = sm_symbol_str(ret->data.cons->car.data.symbol);
     if (str.length && str.data[0] == ':')
-        return_nil(sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "keyword cannot be used as variable name"));
 
     if (str.length == 3 && strncmp(str.data, "nil", 3) == 0)
         return_nil(sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name"));
@@ -116,7 +120,7 @@ SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
 
         SmString str = sm_symbol_str(cons->car.data.symbol);
         if (str.length && str.data[0] == ':')
-            return_nil(sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name"));
+            return_nil(sm_error(ctx, SmErrorInvalidArgument, "keyword cannot be used as variable name"));
 
         if (str.length == 3 && strncmp(str.data, "nil", 3) == 0)
             return_nil(sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name"));
@@ -144,7 +148,7 @@ SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(progn)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_value_is_list(args) || sm_value_is_quoted(args))
-        return sm_error(ctx, SmErrorMissingArguments, "do cannot accept a dotted code list");
+        return sm_error(ctx, SmErrorMissingArguments, "progn cannot accept a dotted code list");
 
     SmError err = sm_ok;
 
@@ -154,7 +158,7 @@ SmError SM_BUILTIN_SYMBOL(progn)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Run each form in code list, return result of last one
     for (SmCons* code = args.data.cons; code; code = sm_list_next(code)) {
         if (!sm_value_is_list(code->cdr) || sm_value_is_quoted(code->cdr))
-            return_nil(sm_error(ctx, SmErrorInvalidArgument, "do cannot accept a dotted code list"));
+            return_nil(sm_error(ctx, SmErrorInvalidArgument, "progn cannot accept a dotted code list"));
 
         *ret = sm_value_nil();
         err = sm_eval(ctx, code->car, ret);
@@ -200,7 +204,7 @@ SmError SM_BUILTIN_SYMBOL(let)(SmContext* ctx, SmValue args, SmValue* ret) {
         SmSymbol id = sm_value_is_symbol(cons->car) ? cons->car.data.symbol : cons->car.data.cons->car.data.symbol;
         SmString str = sm_symbol_str(id);
         if (str.length && str.data[0] == ':') {
-            err = sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name");
+            err = sm_error(ctx, SmErrorInvalidArgument, "keyword cannot be used as variable name");
             break;
         }
 
@@ -275,7 +279,7 @@ SmError SM_BUILTIN_SYMBOL(let_serial)(SmContext* ctx, SmValue args, SmValue* ret
         SmSymbol id = sm_value_is_symbol(cons->car) ? cons->car.data.symbol : cons->car.data.cons->car.data.symbol;
         SmString str = sm_symbol_str(id);
         if (str.length && str.data[0] == ':') {
-            err = sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name");
+            err = sm_error(ctx, SmErrorInvalidArgument, "keyword cannot be used as variable name");
             break;
         }
 
@@ -284,13 +288,15 @@ SmError SM_BUILTIN_SYMBOL(let_serial)(SmContext* ctx, SmValue args, SmValue* ret
             break;
         }
 
-        SmVariable* var = sm_scope_set(*scope, id, sm_value_nil());
+        *ret = sm_value_nil();
 
         if (sm_value_is_cons(cons->car)) {
-            SmError err = sm_eval(ctx, cons->car.data.cons->cdr.data.cons->car, &var->value);
+            SmError err = sm_eval(ctx, cons->car.data.cons->cdr.data.cons->car, ret);
             if (!sm_is_ok(err))
                 break;
         }
+
+        sm_scope_set(*scope, id, *ret);
     }
 
     // Return nil when code list is empty
@@ -299,7 +305,7 @@ SmError SM_BUILTIN_SYMBOL(let_serial)(SmContext* ctx, SmValue args, SmValue* ret
     // Run each form in code list, return result of last one
     for (SmCons* code = sm_list_next(args.data.cons); sm_is_ok(err) && code; code = sm_list_next(code)) {
         if (!sm_value_is_list(code->cdr) || sm_value_is_quoted(code->cdr)) {
-            err = sm_error(ctx, SmErrorInvalidArgument, "let cannot accept a dotted code list");
+            err = sm_error(ctx, SmErrorInvalidArgument, "let* cannot accept a dotted code list");
             break;
         }
 
@@ -337,8 +343,11 @@ SmError SM_BUILTIN_SYMBOL(if)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(cons)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
-    SmArgPattern pattern = { sm_string_from_cstring("cons"), pargs, 2, { NULL, false, false } };
+    static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "cons", 4 },
+        pargs, 2, { NULL, false, false }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -352,7 +361,10 @@ SmError SM_BUILTIN_SYMBOL(cons)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(list)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Optional argument list, evaluated
-    SmArgPattern pattern = { sm_string_from_cstring("list"), NULL, 0, { NULL, true, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "list", 4 },
+        NULL, 0, { NULL, true, true }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -364,8 +376,11 @@ SmError SM_BUILTIN_SYMBOL(list)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(list_dot)(SmContext* ctx, SmValue args, SmValue* ret) {
     // One required argument plus optional argument list, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true } };
-    SmArgPattern pattern = { sm_string_from_cstring("list*"), pargs, 1, { NULL, true, true } };
+    static const SmArgPatternArg pargs[] = { { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "list*", 5 },
+        pargs, 1, { NULL, true, true }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -393,11 +408,9 @@ SmError SM_BUILTIN_SYMBOL(lambda)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_is_ok(err))
         return err;
 
-    SmCons* lambda = sm_heap_alloc_cons(&ctx->heap, ctx);
-    *ret = sm_value_cons(lambda);
-
-    lambda->car = sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda")));
-    lambda->cdr = args;
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+    *fn = sm_function(sm_string_from_cstring("<lambda>"), ctx->scope, args.data.cons);
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -479,10 +492,6 @@ SmError SM_BUILTIN_SYMBOL(caar)(SmContext* ctx, SmValue* ret) {
     SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -491,6 +500,16 @@ SmError SM_BUILTIN_SYMBOL(caar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("caar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -501,10 +520,6 @@ SmError SM_BUILTIN_SYMBOL(cadr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -513,6 +528,16 @@ SmError SM_BUILTIN_SYMBOL(cadr)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cadr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -523,10 +548,6 @@ SmError SM_BUILTIN_SYMBOL(cdar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -536,6 +557,16 @@ SmError SM_BUILTIN_SYMBOL(cdar)(SmContext* ctx, SmValue* ret) {
             SmBuildEnd,
         SmBuildEnd);
 
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cdar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
+
     return sm_ok;
 }
 
@@ -544,10 +575,6 @@ SmError SM_BUILTIN_SYMBOL(cddr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -556,6 +583,16 @@ SmError SM_BUILTIN_SYMBOL(cddr)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cddr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -566,10 +603,6 @@ SmError SM_BUILTIN_SYMBOL(caaar)(SmContext* ctx, SmValue* ret) {
     SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -581,6 +614,16 @@ SmError SM_BUILTIN_SYMBOL(caaar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("caaar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -591,10 +634,6 @@ SmError SM_BUILTIN_SYMBOL(caadr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -606,6 +645,16 @@ SmError SM_BUILTIN_SYMBOL(caadr)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("caadr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -616,10 +665,6 @@ SmError SM_BUILTIN_SYMBOL(cadar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -631,6 +676,16 @@ SmError SM_BUILTIN_SYMBOL(cadar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cadar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -641,10 +696,6 @@ SmError SM_BUILTIN_SYMBOL(cdaar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -656,6 +707,16 @@ SmError SM_BUILTIN_SYMBOL(cdaar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cdaar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -666,10 +727,6 @@ SmError SM_BUILTIN_SYMBOL(caddr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -681,6 +738,16 @@ SmError SM_BUILTIN_SYMBOL(caddr)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("caddr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -691,10 +758,6 @@ SmError SM_BUILTIN_SYMBOL(cddar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -706,6 +769,16 @@ SmError SM_BUILTIN_SYMBOL(cddar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cddar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -716,10 +789,6 @@ SmError SM_BUILTIN_SYMBOL(cdadr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -732,6 +801,16 @@ SmError SM_BUILTIN_SYMBOL(cdadr)(SmContext* ctx, SmValue* ret) {
             SmBuildEnd,
         SmBuildEnd);
 
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cdadr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
+
     return sm_ok;
 }
 
@@ -740,10 +819,6 @@ SmError SM_BUILTIN_SYMBOL(cdddr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -755,6 +830,16 @@ SmError SM_BUILTIN_SYMBOL(cdddr)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cdddr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -765,10 +850,6 @@ SmError SM_BUILTIN_SYMBOL(caaaar)(SmContext* ctx, SmValue* ret) {
     SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -783,6 +864,16 @@ SmError SM_BUILTIN_SYMBOL(caaaar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("caaaar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -793,10 +884,6 @@ SmError SM_BUILTIN_SYMBOL(caaadr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -811,6 +898,16 @@ SmError SM_BUILTIN_SYMBOL(caaadr)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("caaadr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -821,10 +918,6 @@ SmError SM_BUILTIN_SYMBOL(caadar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -839,6 +932,16 @@ SmError SM_BUILTIN_SYMBOL(caadar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("caadar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -849,10 +952,6 @@ SmError SM_BUILTIN_SYMBOL(cadaar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -867,6 +966,16 @@ SmError SM_BUILTIN_SYMBOL(cadaar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cadaar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -877,10 +986,6 @@ SmError SM_BUILTIN_SYMBOL(cdaaar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -895,6 +1000,16 @@ SmError SM_BUILTIN_SYMBOL(cdaaar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cdaaar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -905,10 +1020,6 @@ SmError SM_BUILTIN_SYMBOL(caaddr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -923,6 +1034,16 @@ SmError SM_BUILTIN_SYMBOL(caaddr)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("caaddr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -933,10 +1054,6 @@ SmError SM_BUILTIN_SYMBOL(caddar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -951,6 +1068,16 @@ SmError SM_BUILTIN_SYMBOL(caddar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("caddar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -961,10 +1088,6 @@ SmError SM_BUILTIN_SYMBOL(cddaar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -979,6 +1102,16 @@ SmError SM_BUILTIN_SYMBOL(cddaar)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cddaar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -989,10 +1122,6 @@ SmError SM_BUILTIN_SYMBOL(cadadr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -1007,6 +1136,16 @@ SmError SM_BUILTIN_SYMBOL(cadadr)(SmContext* ctx, SmValue* ret) {
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cadadr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
 
     return sm_ok;
 }
@@ -1017,10 +1156,6 @@ SmError SM_BUILTIN_SYMBOL(cdadar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -1036,6 +1171,16 @@ SmError SM_BUILTIN_SYMBOL(cdadar)(SmContext* ctx, SmValue* ret) {
             SmBuildEnd,
         SmBuildEnd);
 
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cdadar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
+
     return sm_ok;
 }
 
@@ -1045,10 +1190,6 @@ SmError SM_BUILTIN_SYMBOL(cdaadr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -1064,6 +1205,16 @@ SmError SM_BUILTIN_SYMBOL(cdaadr)(SmContext* ctx, SmValue* ret) {
             SmBuildEnd,
         SmBuildEnd);
 
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cdaadr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
+
     return sm_ok;
 }
 
@@ -1073,10 +1224,6 @@ SmError SM_BUILTIN_SYMBOL(cadddr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(car),
             SmBuildList,
@@ -1092,6 +1239,16 @@ SmError SM_BUILTIN_SYMBOL(cadddr)(SmContext* ctx, SmValue* ret) {
             SmBuildEnd,
         SmBuildEnd);
 
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cadddr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
+
     return sm_ok;
 }
 
@@ -1101,10 +1258,6 @@ SmError SM_BUILTIN_SYMBOL(cdaddr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -1120,6 +1273,16 @@ SmError SM_BUILTIN_SYMBOL(cdaddr)(SmContext* ctx, SmValue* ret) {
             SmBuildEnd,
         SmBuildEnd);
 
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cdaddr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
+
     return sm_ok;
 }
 
@@ -1129,10 +1292,6 @@ SmError SM_BUILTIN_SYMBOL(cddadr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -1148,6 +1307,16 @@ SmError SM_BUILTIN_SYMBOL(cddadr)(SmContext* ctx, SmValue* ret) {
             SmBuildEnd,
         SmBuildEnd);
 
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cddadr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
+
     return sm_ok;
 }
 
@@ -1157,10 +1326,6 @@ SmError SM_BUILTIN_SYMBOL(cdddar)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -1176,6 +1341,16 @@ SmError SM_BUILTIN_SYMBOL(cdddar)(SmContext* ctx, SmValue* ret) {
             SmBuildEnd,
         SmBuildEnd);
 
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cdddar"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
+
     return sm_ok;
 }
 
@@ -1184,10 +1359,6 @@ SmError SM_BUILTIN_SYMBOL(cddddr)(SmContext* ctx, SmValue* ret) {
     SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
-        SmBuildList,
-            SmBuildCar, sm_value_symbol(lst),
-            SmBuildEnd,
         SmBuildList,
             SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
@@ -1203,13 +1374,26 @@ SmError SM_BUILTIN_SYMBOL(cddddr)(SmContext* ctx, SmValue* ret) {
             SmBuildEnd,
         SmBuildEnd);
 
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+
+    SmCons args = { sm_value_symbol(lst), sm_value_nil() };
+    *fn = (SmFunction){
+        sm_arg_pattern_from_spec(sm_string_from_cstring("cddddr"), sm_value_cons(&args)),
+        NULL,
+        ret->data.cons
+    };
+    *ret = sm_value_function(fn);
+
     return sm_ok;
 }
 
 
 SmError SM_BUILTIN_SYMBOL(add)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Optional argument list, evaluated
-    SmArgPattern pattern = { sm_string_from_cstring("+"), NULL, 0, { NULL, true, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "+", 1 },
+        NULL, 0, { NULL, true, true }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -1246,8 +1430,11 @@ SmError SM_BUILTIN_SYMBOL(add)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(sub)(SmContext* ctx, SmValue args, SmValue* ret) {
     // One required argument plus optional argument list, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true } };
-    SmArgPattern pattern = { sm_string_from_cstring("-"), pargs, 1, { NULL, true, true } };
+    static const SmArgPatternArg pargs[] = { { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "-", 1 },
+        pargs, 1, { NULL, true, true }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -1300,7 +1487,10 @@ SmError SM_BUILTIN_SYMBOL(sub)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(mul)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Optional argument list, evaluated
-    SmArgPattern pattern = { sm_string_from_cstring("*"), NULL, 0, { NULL, true, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "*", 1 },
+        NULL, 0, { NULL, true, true }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -1337,8 +1527,11 @@ SmError SM_BUILTIN_SYMBOL(mul)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(div)(SmContext* ctx, SmValue args, SmValue* ret) {
     // One required argument plus optional argument list, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true} };
-    SmArgPattern pattern = { sm_string_from_cstring("/"), pargs, 1, { NULL, true, true } };
+    static const SmArgPatternArg pargs[] = { { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "/", 1 },
+        pargs, 1, { NULL, true, true }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -1392,8 +1585,11 @@ SmError SM_BUILTIN_SYMBOL(div)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(eq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { sm_string_from_cstring("="), pargs, 2, { NULL, false, false } };
+    static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "=", 1 },
+        pargs, 2, { NULL, false, false }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -1420,8 +1616,11 @@ SmError SM_BUILTIN_SYMBOL(eq)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(neq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { sm_string_from_cstring("!="), pargs, 2, { NULL, false, false } };
+    static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "!=", 2 },
+        pargs, 2, { NULL, false, false }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -1448,8 +1647,11 @@ SmError SM_BUILTIN_SYMBOL(neq)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(lt)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { sm_string_from_cstring("<"), pargs, 2, { NULL, false, false } };
+    static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "<", 1 },
+        pargs, 2, { NULL, false, false }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -1476,8 +1678,11 @@ SmError SM_BUILTIN_SYMBOL(lt)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(lteq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { sm_string_from_cstring("<="), pargs, 2, { NULL, false, false } };
+    static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ "<=", 2 },
+        pargs, 2, { NULL, false, false }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -1504,8 +1709,11 @@ SmError SM_BUILTIN_SYMBOL(lteq)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(gt)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { sm_string_from_cstring(">"), pargs, 2, { NULL, false, false } };
+    static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ ">", 1 },
+        pargs, 2, { NULL, false, false }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
@@ -1532,8 +1740,11 @@ SmError SM_BUILTIN_SYMBOL(gt)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(gteq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
-    const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { sm_string_from_cstring(">="), pargs, 2, { NULL, false, false } };
+    static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
+    static const SmArgPattern pattern = {
+        (SmString){ ">=", 2 },
+        pargs, 2, { NULL, false, false }
+    };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))

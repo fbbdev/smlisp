@@ -5,6 +5,7 @@
 #include "context.h"
 #include "error.h"
 #include "eval.h"
+#include "function.h"
 #include "hash.h"
 #include "heap.h"
 #include "number.h"
