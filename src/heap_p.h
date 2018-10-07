@@ -7,6 +7,7 @@
 
 typedef enum Type {
     Cons,
+    Value = Cons,
     Scope,
     String
 } Type;
@@ -21,11 +22,18 @@ typedef struct SmHeapObject {
         SmScope scope;
         char string;
     } data;
+
     uint8_t mem[];
 } Object;
 
 typedef struct SmHeapRoot {
     struct SmHeapRoot* next;
     struct SmHeapRoot* prev;
-    SmValue value;
+
+    Type type;
+
+    union Ptr {
+        SmValue value;
+        SmScope* scope;
+    } ptr;
 } Root;

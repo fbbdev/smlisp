@@ -17,6 +17,7 @@ void sm_register_builtins(SmContext* ctx);
 \
     builtin(progn) \
     builtin(let) \
+    builtin_op(let_serial, let*) \
     builtin(if) \
 \
     builtin(cons) \

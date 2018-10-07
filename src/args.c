@@ -35,9 +35,9 @@ SmError sm_arg_pattern_validate_spec(SmContext* ctx, SmValue spec) {
     return sm_ok;
 }
 
-SmArgPattern sm_arg_pattern_from_spec(SmValue spec) {
+SmArgPattern sm_arg_pattern_from_spec(SmString name, SmValue spec) {
     // Spec *must* be valid, otherwise this is UB. See sm_arg_pattern_validate_spec
-    SmArgPattern pattern = { NULL, 0, { NULL, false, false } };
+    SmArgPattern pattern = { name, NULL, 0, { NULL, false, false } };
 
     if (sm_value_is_symbol(spec)) {
         pattern.rest.id = spec.data.symbol;
@@ -98,15 +98,21 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
     // Reject invalid argument lists
     if (available < pattern->count) {
         *ret = sm_value_nil();
-        snprintf(err_buf, sizeof(err_buf), "expected %s%zu arguments, %zu given", pattern->rest.use ? "at least " : "", pattern->count, available);
+        snprintf(err_buf, sizeof(err_buf), "%.*s: expected %s%zu arguments, %zu given",
+            (int) pattern->name.length, pattern->name.data,
+            pattern->rest.use ? "at least " : "", pattern->count, available);
         return sm_error(ctx, SmErrorMissingArguments, err_buf);
     } else if (available > pattern->count && !pattern->rest.use) {
         *ret = sm_value_nil();
-        snprintf(err_buf, sizeof(err_buf), "expected %zu arguments, %zu given", pattern->count, available);
+        snprintf(err_buf, sizeof(err_buf), "%.*s: expected %zu arguments, %zu given",
+            (int) pattern->name.length, pattern->name.data,
+            pattern->count, available);
         return sm_error(ctx, SmErrorExcessArguments, err_buf);
     } else if (!pattern->rest.use && (!sm_value_is_nil(final_cdr) || sm_value_is_quoted(final_cdr))) {
         *ret = sm_value_nil();
-        return sm_error(ctx, SmErrorInvalidArgument, "cannot accept dotted argument list");
+        snprintf(err_buf, sizeof(err_buf), "%.*s: cannot accept dotted argument list",
+            (int) pattern->name.length, pattern->name.data);
+        return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
 
     // At this point we know input matches the pattern so we can get away
@@ -126,11 +132,11 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
     }
 
     // Save evaluated dot part, create root if needed
-    SmValue* dot_root = eval_dot ? sm_heap_root(&ctx->heap) : &dot;
+    SmValue* dot_root = eval_dot ? sm_heap_root_value(&ctx->heap) : &dot;
     *dot_root = *ret;
 
     // Init output list
-    *ret = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
+    *ret = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx));
     SmCons* out = ret->data.cons;
 
     SmError err = sm_ok;
@@ -159,7 +165,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
         }
 
         if (arg) {
-            out->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
+            out->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx));
             out = out->cdr.data.cons;
         }
     }
@@ -170,12 +176,12 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
         *ret = sm_value_nil(); // In case of error drop output list
 
     if (eval_dot)
-        sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
+        sm_heap_root_value_drop(&ctx->heap, ctx, dot_root);
 
     return err;
 }
 
-SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmValue args) {
+SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmScope* scope, SmValue args) {
     SmCons* arg = (sm_value_is_cons(args) && sm_value_is_unquoted(args)) ? args.data.cons : NULL;
     size_t available = sm_list_size(arg);
 
@@ -187,10 +193,10 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
         if (!sm_value_is_symbol(dot) || sm_value_is_quoted(dot)) {
             dot = sm_value_unquote(dot, 1);
         } else {
-            dot_root = sm_heap_root(&ctx->heap);
+            dot_root = sm_heap_root_value(&ctx->heap);
             SmError err = sm_eval(ctx, dot, dot_root);
             if (!sm_is_ok(err)) {
-                sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
+                sm_heap_root_value_drop(&ctx->heap, ctx, dot_root);
                 return err;
             }
         }
@@ -206,18 +212,25 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
     // Reject invalid argument lists
     if (available < pattern->count) {
         if (dot_root != &dot)
-            sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
-        snprintf(err_buf, sizeof(err_buf), "expected %s%zu arguments, %zu given", pattern->rest.use ? "at least " : "", pattern->count, available);
+            sm_heap_root_value_drop(&ctx->heap, ctx, dot_root);
+        snprintf(err_buf, sizeof(err_buf), "%.*s: expected %s%zu arguments, %zu given",
+            (int) pattern->name.length, pattern->name.data,
+            pattern->rest.use ? "at least " : "", pattern->count, available);
         return sm_error(ctx, SmErrorMissingArguments, err_buf);
     } else if (available > pattern->count && !pattern->rest.use) {
         if (dot_root != &dot)
-            sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
-        snprintf(err_buf, sizeof(err_buf), "expected %zu arguments, %zu given", pattern->count, available);
+            sm_heap_root_value_drop(&ctx->heap, ctx, dot_root);
+        snprintf(err_buf, sizeof(err_buf), "%.*s: expected %zu arguments, %zu given",
+            (int) pattern->name.length, pattern->name.data,
+            pattern->count, available);
         return sm_error(ctx, SmErrorExcessArguments, err_buf);
     } else if (!pattern->rest.use && (!sm_value_is_nil(final_cdr) || sm_value_is_quoted(final_cdr))) {
         if (dot_root != &dot)
-            sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
-        return sm_error(ctx, SmErrorInvalidArgument, "cannot accept dotted argument list");
+            sm_heap_root_value_drop(&ctx->heap, ctx, dot_root);
+
+        snprintf(err_buf, sizeof(err_buf), "%.*s: cannot accept dotted argument list",
+            (int) pattern->name.length, pattern->name.data);
+        return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
 
     // At this point we know input matches the pattern so we can get away
@@ -229,14 +242,14 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
             return sm_ok;
         } else if (!pattern->rest.eval) {
             // If no evaluation is needed, we can just return args
-            sm_scope_set(&ctx->frame->scope, pattern->rest.id, args);
+            sm_scope_set(scope, pattern->rest.id, args);
             return sm_ok;
         } else if (!arg) {
             // If evaluation is needed but we only have the dot part,
             // we can just return the evaluated dot part
-            sm_scope_set(&ctx->frame->scope, pattern->rest.id, *dot_root);
+            sm_scope_set(scope, pattern->rest.id, *dot_root);
             if (dot_root != &dot)
-                sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
+                sm_heap_root_value_drop(&ctx->heap, ctx, dot_root);
             return sm_ok;
         }
     }
@@ -253,12 +266,12 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
     // at least pattern->count items
     for (size_t i = 0; i < pattern->count; ++i) {
         if (!into_dot && pattern->args[i].eval) {
-            SmVariable* var = sm_scope_set(&ctx->frame->scope, pattern->args[i].id, sm_value_nil());
+            SmVariable* var = sm_scope_set(scope, pattern->args[i].id, sm_value_nil());
             err = sm_eval(ctx, arg->car, &var->value);
             if (!sm_is_ok(err))
                 break;
         } else {
-            sm_scope_set(&ctx->frame->scope, pattern->args[i].id, arg->car);
+            sm_scope_set(scope, pattern->args[i].id, arg->car);
         }
 
         if (!(arg = sm_list_next(arg)) && !into_dot &&
@@ -272,11 +285,11 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
 
     if (sm_is_ok(err) && pattern->rest.use) {
         // Rest argument takes the value of the dot part...
-        SmVariable* var = sm_scope_set(&ctx->frame->scope, pattern->rest.id, final_cdr);
+        SmVariable* var = sm_scope_set(scope, pattern->rest.id, final_cdr);
 
         // ...unless there are more args to take, in which case we build a list
         if (arg) {
-            var->value = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
+            var->value = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx));
             SmCons* rest = var->value.data.cons;
 
             while (arg) {
@@ -297,7 +310,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
                 }
 
                 if (arg) {
-                    rest->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
+                    rest->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx));
                     rest = rest->cdr.data.cons;
                 }
             }
@@ -306,17 +319,8 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
         }
     }
 
-    if (!sm_is_ok(err)) {
-        // In case of error remove already unpacked args from scope
-        for (size_t i = 0; i < pattern->count; ++i)
-            sm_scope_delete(&ctx->frame->scope, pattern->args[i].id);
-
-        if (pattern->rest.use)
-            sm_scope_delete(&ctx->frame->scope, pattern->rest.id);
-    }
-
     if (dot_root != &dot)
-        sm_heap_root_drop(&ctx->heap, ctx->frame, dot_root);
+        sm_heap_root_value_drop(&ctx->heap, ctx, dot_root);
 
     return err;
 }

@@ -2,18 +2,22 @@
 #include "context_p.h"
 
 // Inlines
-extern inline void sm_context_enter_frame(SmContext* ctx, SmStackFrame* frame, SmString name, SmValue fn);
+extern inline void sm_context_enter_frame(SmContext* ctx, SmStackFrame* frame, SmString name);
 extern inline void sm_context_exit_frame(SmContext* ctx);
 
 SmContext* sm_context(SmGCConfig gc) {
     SmContext* ctx = sm_aligned_alloc(sm_alignof(SmContext), sizeof(SmContext));
 
+    SmHeap heap = sm_heap(gc);
+    SmScope* globals = sm_heap_alloc_scope(&heap, NULL, NULL);
+
     *ctx = (SmContext){
         sm_symbol_set(),
         sm_rbtree(sizeof(External), sm_alignof(External), sm_symbol_key, sm_key_compare_ptr),
-        sm_stack_frame(NULL, sm_string_from_cstring("<main>"), sm_value_nil()),
+        (SmStackFrame){ NULL, sm_string_from_cstring("<main>"), globals },
         &ctx->main,
-        sm_heap(gc)
+        globals,
+        heap
     };
 
     return ctx;
@@ -22,12 +26,11 @@ SmContext* sm_context(SmGCConfig gc) {
 void sm_context_drop(SmContext* ctx) {
     sm_symbol_set_drop(&ctx->symbols);
     sm_rbtree_drop(&ctx->externals);
-    sm_stack_frame_drop(&ctx->main);
     sm_heap_drop(&ctx->heap);
     free(ctx);
 }
 
-// External management
+// External function/variable management
 void sm_context_register_function(SmContext* ctx, SmSymbol id, SmExternalFunction fn) {
     External b = { id, Function, { .function = fn } };
     sm_rbtree_insert(&ctx->externals, &b);

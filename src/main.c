@@ -66,8 +66,8 @@ static bool complete(char const* buf) {
 static int interactive(SmContext* ctx, char const* progname) {
     int exit_code = 0;
 
-    SmValue* forms = sm_heap_root(&ctx->heap);
-    SmValue* res = sm_heap_root(&ctx->heap);
+    SmValue* forms = sm_heap_root_value(&ctx->heap);
+    SmValue* res = sm_heap_root_value(&ctx->heap);
 
     SmParser parser = sm_parser(sm_string_from_cstring("<stdin>"), (SmString){ NULL, 0 });
 
@@ -159,8 +159,8 @@ int main(int argc, char** argv) {
         return exit_code;
     }
 
-    SmValue* forms = sm_heap_root(&ctx->heap);
-    SmValue* res = sm_heap_root(&ctx->heap);
+    SmValue* forms = sm_heap_root_value(&ctx->heap);
+    SmValue* res = sm_heap_root_value(&ctx->heap);
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "-") == 0) {

@@ -7,15 +7,8 @@
 #include <string.h>
 
 // Private helpers
-static inline SmError exit_frame_pass_error(SmContext* ctx, SmError err) {
-    sm_context_exit_frame(ctx);
-    return err;
-}
-
 #define return_value(value) return ((*ret = (value)), (sm_ok))
-#define return_value_exit_frame(ctx, value) return ((*ret = (value)), (sm_context_exit_frame(ctx)), (sm_ok))
 #define return_nil(err) return ((*ret = sm_value_nil()), (err))
-#define return_nil_exit_frame(ctx, err) return ((*ret = sm_value_nil()), exit_frame_pass_error((ctx), (err)))
 
 // Builtin registration
 void sm_register_builtins(SmContext* ctx) {
@@ -45,12 +38,12 @@ SmError SM_BUILTIN_SYMBOL(eval)(SmContext* ctx, SmValue args, SmValue* ret) {
     else if (!sm_value_is_nil(args.data.cons->cdr))
         return sm_error(ctx, SmErrorExcessArguments, "eval requires exactly 1 argument");
 
-    SmValue* form = sm_heap_root(&ctx->heap);
+    SmValue* form = sm_heap_root_value(&ctx->heap);
     SmError err = sm_eval(ctx, args.data.cons->car, form);
     if (sm_is_ok(err))
         err = sm_eval(ctx, *form, ret);
 
-    sm_heap_root_drop(&ctx->heap, ctx->frame, form);
+    sm_heap_root_value_drop(&ctx->heap, ctx, form);
     return err;
 }
 
@@ -79,35 +72,32 @@ SmError SM_BUILTIN_SYMBOL(print)(SmContext* ctx, SmValue args, SmValue* ret) {
 SmError SM_BUILTIN_SYMBOL(set)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { pargs, 2, { NULL, false, false } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("set"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("set"), pargs, 2, { NULL, false, false } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     if (!sm_value_is_symbol(ret->data.cons->car) || sm_value_is_quoted(ret->data.cons->car))
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "first argument to set must evaluate to an unquoted symbol"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "first argument to set must evaluate to an unquoted symbol"));
 
     SmString str = sm_symbol_str(ret->data.cons->car.data.symbol);
     if (str.length && str.data[0] == ':')
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name"));
 
     if (str.length == 3 && strncmp(str.data, "nil", 3) == 0)
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name"));
 
-    SmVariable* var = sm_scope_lookup(&ctx->frame->scope, ret->data.cons->car.data.symbol);
+    SmVariable* var = sm_scope_lookup(ctx->scope, ret->data.cons->car.data.symbol);
     if (var) {
         var->value = ret->data.cons->cdr.data.cons->car;
     } else {
-        sm_scope_set(&ctx->main.scope,
+        sm_scope_set(ctx->main.saved_scope,
             ret->data.cons->car.data.symbol,
             ret->data.cons->cdr.data.cons->car);
     }
 
-    return_value_exit_frame(ctx, ret->data.cons->cdr.data.cons->car);
+    return_value(ret->data.cons->cdr.data.cons->car);
 }
 
 SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
@@ -135,11 +125,11 @@ SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
         if (!sm_is_ok(err))
             return_nil(err);
 
-        SmVariable* var = sm_scope_lookup(&ctx->frame->scope, cons->car.data.symbol);
+        SmVariable* var = sm_scope_lookup(ctx->scope, cons->car.data.symbol);
         if (var)
             var->value = *ret;
         else
-            sm_scope_set(&ctx->main.scope, cons->car.data.symbol, *ret);
+            sm_scope_set(ctx->main.saved_scope, cons->car.data.symbol, *ret);
 
         cons = sm_list_next(cons);
         if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
@@ -185,60 +175,142 @@ SmError SM_BUILTIN_SYMBOL(let)(SmContext* ctx, SmValue args, SmValue* ret) {
     else if (!sm_value_is_list(args.data.cons->car) || sm_value_is_quoted(args.data.cons->car))
         return sm_error(ctx, SmErrorInvalidArgument, "first argument to let must be an unquoted binding list");
 
-    // FIXME: This implementation is wrong, works like (let*)
-    // Fix must wait for proper scope separation
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("let"), sm_value_nil());
+    SmScope** scope = sm_heap_root_scope(&ctx->heap);
+    *scope = sm_heap_alloc_scope(&ctx->heap, ctx, ctx->scope);
+
+    SmError err = sm_ok;
 
     for (SmCons* cons = args.data.cons->car.data.cons; cons; cons = sm_list_next(cons)) {
         if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
-            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let cannot accept a dotted binding list"));
+            err = sm_error(ctx, SmErrorInvalidArgument, "let cannot accept a dotted binding list");
         else if ((!sm_value_is_symbol(cons->car) && !sm_value_is_cons(cons->car)) || sm_value_is_quoted(cons->car))
-            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or symbols"));
+            err = sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or symbols");
         else if (sm_value_is_cons(cons->car)) {
             if (!sm_value_is_cons(cons->car.data.cons->cdr) || sm_value_is_quoted(cons->car.data.cons->cdr))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or symbols"));
+                err = sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or symbols");
             else if (!sm_value_is_nil(cons->car.data.cons->cdr.data.cons->cdr) || sm_value_is_quoted(cons->car.data.cons->cdr.data.cons->cdr))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or symbols"));
+                err = sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or symbols");
             else if (!sm_value_is_symbol(cons->car.data.cons->car) || sm_value_is_quoted(cons->car.data.cons->car))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "list elements in let binding lists must be (symbol expression) pairs"));
+                err = sm_error(ctx, SmErrorInvalidArgument, "list elements in let binding lists must be (symbol expression) pairs");
         }
+
+        if (!sm_is_ok(err))
+            break;
 
         SmSymbol id = sm_value_is_symbol(cons->car) ? cons->car.data.symbol : cons->car.data.cons->car.data.symbol;
         SmString str = sm_symbol_str(id);
-        if (str.length && str.data[0] == ':')
-            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name"));
+        if (str.length && str.data[0] == ':') {
+            err = sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name");
+            break;
+        }
 
-        if (str.length == 3 && strncmp(str.data, "nil", 3) == 0)
-            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name"));
+        if (str.length == 3 && strncmp(str.data, "nil", 3) == 0) {
+            err = sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name");
+            break;
+        }
 
-        SmVariable* var = sm_scope_set(&frame.scope, id, sm_value_nil());
+        SmVariable* var = sm_scope_set(*scope, id, sm_value_nil());
 
         if (sm_value_is_cons(cons->car)) {
             SmError err = sm_eval(ctx, cons->car.data.cons->cdr.data.cons->car, &var->value);
             if (!sm_is_ok(err))
-                return_nil_exit_frame(ctx, err);
+                break;
         }
     }
 
-    SmError err = sm_ok;
+    ctx->scope = *scope;
 
     // Return nil when code list is empty
     *ret = sm_value_nil();
 
     // Run each form in code list, return result of last one
-    for (SmCons* code = sm_list_next(args.data.cons); code; code = sm_list_next(code)) {
-        if (!sm_value_is_list(code->cdr) || sm_value_is_quoted(code->cdr))
-            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let cannot accept a dotted code list"));
+    for (SmCons* code = sm_list_next(args.data.cons); sm_is_ok(err) && code; code = sm_list_next(code)) {
+        if (!sm_value_is_list(code->cdr) || sm_value_is_quoted(code->cdr)) {
+            err = sm_error(ctx, SmErrorInvalidArgument, "let cannot accept a dotted code list");
+            break;
+        }
 
         *ret = sm_value_nil();
         err = sm_eval(ctx, code->car, ret);
-        if (!sm_is_ok(err))
-            return_nil_exit_frame(ctx, err);
     }
 
-    sm_context_exit_frame(ctx);
-    return sm_ok;
+    ctx->scope = (*scope)->parent;
+    sm_heap_root_scope_drop(&ctx->heap, ctx, scope);
+
+    return err;
+}
+
+SmError SM_BUILTIN_SYMBOL(let_serial)(SmContext* ctx, SmValue args, SmValue* ret) {
+    if (!sm_value_is_list(args) || sm_value_is_quoted(args))
+        return sm_error(ctx, SmErrorMissingArguments, "let* cannot accept a dotted argument list");
+    else if (sm_value_is_nil(args))
+        return sm_error(ctx, SmErrorMissingArguments, "let* requires at least 1 argument");
+    else if (!sm_value_is_list(args.data.cons->cdr) || sm_value_is_quoted(args.data.cons->cdr))
+        return sm_error(ctx, SmErrorMissingArguments, "let* cannot accept a dotted code list");
+    else if (!sm_value_is_list(args.data.cons->car) || sm_value_is_quoted(args.data.cons->car))
+        return sm_error(ctx, SmErrorInvalidArgument, "first argument to let* must be an unquoted binding list");
+
+    SmScope** scope = sm_heap_root_scope(&ctx->heap);
+    *scope = ctx->scope = sm_heap_alloc_scope(&ctx->heap, ctx, ctx->scope);
+
+    SmError err = sm_ok;
+
+    for (SmCons* cons = args.data.cons->car.data.cons; cons; cons = sm_list_next(cons)) {
+        if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
+            err = sm_error(ctx, SmErrorInvalidArgument, "let* cannot accept a dotted binding list");
+        else if ((!sm_value_is_symbol(cons->car) && !sm_value_is_cons(cons->car)) || sm_value_is_quoted(cons->car))
+            err = sm_error(ctx, SmErrorInvalidArgument, "let* binding lists may contain only unquoted 2-element lists or symbols");
+        else if (sm_value_is_cons(cons->car)) {
+            if (!sm_value_is_cons(cons->car.data.cons->cdr) || sm_value_is_quoted(cons->car.data.cons->cdr))
+                err = sm_error(ctx, SmErrorInvalidArgument, "let* binding lists may contain only unquoted 2-element lists or symbols");
+            else if (!sm_value_is_nil(cons->car.data.cons->cdr.data.cons->cdr) || sm_value_is_quoted(cons->car.data.cons->cdr.data.cons->cdr))
+                err = sm_error(ctx, SmErrorInvalidArgument, "let* binding lists may contain only unquoted 2-element lists or symbols");
+            else if (!sm_value_is_symbol(cons->car.data.cons->car) || sm_value_is_quoted(cons->car.data.cons->car))
+                err = sm_error(ctx, SmErrorInvalidArgument, "list elements in let* binding lists must be (symbol expression) pairs");
+        }
+
+        if (!sm_is_ok(err))
+            break;
+
+        SmSymbol id = sm_value_is_symbol(cons->car) ? cons->car.data.symbol : cons->car.data.cons->car.data.symbol;
+        SmString str = sm_symbol_str(id);
+        if (str.length && str.data[0] == ':') {
+            err = sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name");
+            break;
+        }
+
+        if (str.length == 3 && strncmp(str.data, "nil", 3) == 0) {
+            err = sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name");
+            break;
+        }
+
+        SmVariable* var = sm_scope_set(*scope, id, sm_value_nil());
+
+        if (sm_value_is_cons(cons->car)) {
+            SmError err = sm_eval(ctx, cons->car.data.cons->cdr.data.cons->car, &var->value);
+            if (!sm_is_ok(err))
+                break;
+        }
+    }
+
+    // Return nil when code list is empty
+    *ret = sm_value_nil();
+
+    // Run each form in code list, return result of last one
+    for (SmCons* code = sm_list_next(args.data.cons); sm_is_ok(err) && code; code = sm_list_next(code)) {
+        if (!sm_value_is_list(code->cdr) || sm_value_is_quoted(code->cdr)) {
+            err = sm_error(ctx, SmErrorInvalidArgument, "let cannot accept a dotted code list");
+            break;
+        }
+
+        *ret = sm_value_nil();
+        err = sm_eval(ctx, code->car, ret);
+    }
+
+    ctx->scope = (*scope)->parent;
+    sm_heap_root_scope_drop(&ctx->heap, ctx, scope);
+
+    return err;
 }
 
 SmError SM_BUILTIN_SYMBOL(if)(SmContext* ctx, SmValue args, SmValue* ret) {
@@ -266,55 +338,44 @@ SmError SM_BUILTIN_SYMBOL(if)(SmContext* ctx, SmValue args, SmValue* ret) {
 SmError SM_BUILTIN_SYMBOL(cons)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
-    SmArgPattern pattern = { pargs, 2, { NULL, false, false } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("cons"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("cons"), pargs, 2, { NULL, false, false } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     // Second argument becomes cdr
     ret->data.cons->cdr = ret->data.cons->cdr.data.cons->car;
 
-    sm_context_exit_frame(ctx);
     return sm_ok;
 }
 
 SmError SM_BUILTIN_SYMBOL(list)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Optional argument list, evaluated
-    SmArgPattern pattern = { NULL, 0, { NULL, true, true } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("list"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("list"), NULL, 0, { NULL, true, true } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     // Return evaluated argument list, precisely what list does
-    sm_context_exit_frame(ctx);
     return sm_ok;
 }
 
 SmError SM_BUILTIN_SYMBOL(list_dot)(SmContext* ctx, SmValue args, SmValue* ret) {
     // One required argument plus optional argument list, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true } };
-    SmArgPattern pattern = { pargs, 1, { NULL, true, true } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("list*"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("list*"), pargs, 1, { NULL, true, true } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     SmCons* arg = ret->data.cons;
 
     // If only one argument, return it
     if (!sm_list_next(arg))
-        return_value_exit_frame(ctx, ret->data.cons->car);
+        return_value(ret->data.cons->car);
 
     // Stop one cons before the last one
     while (sm_list_next(sm_list_next(arg)))
@@ -324,7 +385,6 @@ SmError SM_BUILTIN_SYMBOL(list_dot)(SmContext* ctx, SmValue args, SmValue* ret) 
     arg->cdr = arg->cdr.data.cons->car;
 
     // Return evaluated argument list
-    sm_context_exit_frame(ctx);
     return sm_ok;
 }
 
@@ -333,7 +393,7 @@ SmError SM_BUILTIN_SYMBOL(lambda)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_is_ok(err))
         return err;
 
-    SmCons* lambda = sm_heap_alloc_cons(&ctx->heap, ctx->frame);
+    SmCons* lambda = sm_heap_alloc_cons(&ctx->heap, ctx);
     *ret = sm_value_cons(lambda);
 
     lambda->car = sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda")));
@@ -399,7 +459,7 @@ SmError SM_BUILTIN_SYMBOL(cdr)(SmContext* ctx, SmValue args, SmValue* ret) {
         return_nil(err);
 
     if (sm_value_is_quoted(*ret)) {
-        SmCons* cons = sm_heap_alloc_cons(&ctx->heap, ctx->frame);
+        SmCons* cons = sm_heap_alloc_cons(&ctx->heap, ctx);
         cons->car = sm_value_unquote(*ret, 1);
         return_value(sm_value_cons(cons));
     }
@@ -1149,14 +1209,11 @@ SmError SM_BUILTIN_SYMBOL(cddddr)(SmContext* ctx, SmValue* ret) {
 
 SmError SM_BUILTIN_SYMBOL(add)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Optional argument list, evaluated
-    SmArgPattern pattern = { NULL, 0, { NULL, true, true } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("+"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("+"), NULL, 0, { NULL, true, true } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     SmNumber res = sm_number_int(0);
     SmCons* arg = (sm_value_is_cons(*ret) ? ret->data.cons : NULL);
@@ -1164,7 +1221,7 @@ SmError SM_BUILTIN_SYMBOL(add)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Sum integers
     for (; arg; arg = sm_list_next(arg)) {
         if (!sm_value_is_number(arg->car))
-            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "+ arguments must be numbers"));
+            return_nil(sm_error(ctx, SmErrorInvalidArgument, "+ arguments must be numbers"));
 
         if (!sm_number_is_int(arg->car.data.number))
             break;
@@ -1178,39 +1235,36 @@ SmError SM_BUILTIN_SYMBOL(add)(SmContext* ctx, SmValue args, SmValue* ret) {
 
         for (; arg; arg = sm_list_next(arg)) {
             if (!sm_value_is_number(arg->car))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "+ arguments must be numbers"));
+                return_nil(sm_error(ctx, SmErrorInvalidArgument, "+ arguments must be numbers"));
 
             res.value.f += sm_number_as_float(arg->car.data.number).value.f;
         }
     }
 
-    return_value_exit_frame(ctx, sm_value_number(res));
+    return_value(sm_value_number(res));
 }
 
 SmError SM_BUILTIN_SYMBOL(sub)(SmContext* ctx, SmValue args, SmValue* ret) {
     // One required argument plus optional argument list, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true } };
-    SmArgPattern pattern = { pargs, 1, { NULL, true, true } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("-"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("-"), pargs, 1, { NULL, true, true } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     // Argument list is not empty so skip type check
     SmCons* arg = ret->data.cons;
 
     if (!sm_value_is_number(arg->car))
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "- arguments must be numbers"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "- arguments must be numbers"));
 
     // If there is a single argument, invert sign
     if (!sm_list_next(arg)) {
         if (sm_number_is_int(arg->car.data.number))
-            return_value_exit_frame(ctx, sm_value_number(sm_number_int(- arg->car.data.number.value.i)));
+            return_value(sm_value_number(sm_number_int(- arg->car.data.number.value.i)));
         else
-            return_value_exit_frame(ctx, sm_value_number(sm_number_float(- arg->car.data.number.value.f)));
+            return_value(sm_value_number(sm_number_float(- arg->car.data.number.value.f)));
     }
 
     SmNumber res = arg->car.data.number;
@@ -1220,7 +1274,7 @@ SmError SM_BUILTIN_SYMBOL(sub)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (sm_number_is_int(res)) {
         for (; arg; arg = sm_list_next(arg)) {
             if (!sm_value_is_number(arg->car))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "- arguments must be numbers"));
+                return_nil(sm_error(ctx, SmErrorInvalidArgument, "- arguments must be numbers"));
 
             if (!sm_number_is_int(arg->car.data.number))
                 break;
@@ -1235,25 +1289,22 @@ SmError SM_BUILTIN_SYMBOL(sub)(SmContext* ctx, SmValue args, SmValue* ret) {
 
         for (; arg; arg = sm_list_next(arg)) {
             if (!sm_value_is_number(arg->car))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "- arguments must be numbers"));
+                return_nil(sm_error(ctx, SmErrorInvalidArgument, "- arguments must be numbers"));
 
             res.value.f -= sm_number_as_float(arg->car.data.number).value.f;
         }
     }
 
-    return_value_exit_frame(ctx, sm_value_number(res));
+    return_value(sm_value_number(res));
 }
 
 SmError SM_BUILTIN_SYMBOL(mul)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Optional argument list, evaluated
-    SmArgPattern pattern = { NULL, 0, { NULL, true, true } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("*"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("*"), NULL, 0, { NULL, true, true } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     SmNumber res = sm_number_int(1);
     SmCons* arg = (sm_value_is_cons(*ret) ? ret->data.cons : NULL);
@@ -1261,7 +1312,7 @@ SmError SM_BUILTIN_SYMBOL(mul)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Multiply integers
     for (; arg; arg = sm_list_next(arg)) {
         if (!sm_value_is_number(arg->car))
-            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "* arguments must be numbers"));
+            return_nil(sm_error(ctx, SmErrorInvalidArgument, "* arguments must be numbers"));
 
         if (!sm_number_is_int(arg->car.data.number))
             break;
@@ -1275,39 +1326,36 @@ SmError SM_BUILTIN_SYMBOL(mul)(SmContext* ctx, SmValue args, SmValue* ret) {
 
         for (; arg; arg = sm_list_next(arg)) {
             if (!sm_value_is_number(arg->car))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "* arguments must be numbers"));
+                return_nil(sm_error(ctx, SmErrorInvalidArgument, "* arguments must be numbers"));
 
             res.value.f *= sm_number_as_float(arg->car.data.number).value.f;
         }
     }
 
-    return_value_exit_frame(ctx, sm_value_number(res));
+    return_value(sm_value_number(res));
 }
 
 SmError SM_BUILTIN_SYMBOL(div)(SmContext* ctx, SmValue args, SmValue* ret) {
     // One required argument plus optional argument list, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true} };
-    SmArgPattern pattern = { pargs, 1, { NULL, true, true } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("/"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("/"), pargs, 1, { NULL, true, true } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     // Argument list is not empty so skip type check
     SmCons* arg = ret->data.cons;
 
     if (!sm_value_is_number(arg->car))
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "- arguments must be numbers"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "- arguments must be numbers"));
 
     // If there is a single argument, return inverse
     if (!sm_list_next(arg)) {
         if (sm_number_is_int(arg->car.data.number))
-            return_value_exit_frame(ctx, sm_value_number(sm_number_int(1/arg->car.data.number.value.i)));
+            return_value(sm_value_number(sm_number_int(1/arg->car.data.number.value.i)));
         else
-            return_value_exit_frame(ctx, sm_value_number(sm_number_float(1.0/arg->car.data.number.value.f)));
+            return_value(sm_value_number(sm_number_float(1.0/arg->car.data.number.value.f)));
     }
 
     SmNumber res = arg->car.data.number;
@@ -1317,7 +1365,7 @@ SmError SM_BUILTIN_SYMBOL(div)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (sm_number_is_int(res)) {
         for (; arg; arg = sm_list_next(arg)) {
             if (!sm_value_is_number(arg->car))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "/ arguments must be numbers"));
+                return_nil(sm_error(ctx, SmErrorInvalidArgument, "/ arguments must be numbers"));
 
             if (!sm_number_is_int(arg->car.data.number))
                 break;
@@ -1332,30 +1380,27 @@ SmError SM_BUILTIN_SYMBOL(div)(SmContext* ctx, SmValue args, SmValue* ret) {
 
         for (; arg; arg = sm_list_next(arg)) {
             if (!sm_value_is_number(arg->car))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "/ arguments must be numbers"));
+                return_nil(sm_error(ctx, SmErrorInvalidArgument, "/ arguments must be numbers"));
 
             res.value.f /= sm_number_as_float(arg->car.data.number).value.f;
         }
     }
 
-    return_value_exit_frame(ctx, sm_value_number(res));
+    return_value(sm_value_number(res));
 }
 
 
 SmError SM_BUILTIN_SYMBOL(eq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { pargs, 2, { NULL, false, false } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("set"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("="), pargs, 2, { NULL, false, false } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     if (!sm_value_is_number(ret->data.cons->car) || !sm_value_is_number(ret->data.cons->cdr.data.cons->car))
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "= arguments must be numbers"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "= arguments must be numbers"));
 
     SmNumber lhs = ret->data.cons->car.data.number;
     SmNumber rhs = ret->data.cons->cdr.data.cons->car.data.number;
@@ -1367,26 +1412,23 @@ SmError SM_BUILTIN_SYMBOL(eq)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i == rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f == rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
+        return_value(sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
-    return_nil_exit_frame(ctx, sm_ok);
+    return_nil(sm_ok);
 }
 
 SmError SM_BUILTIN_SYMBOL(neq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { pargs, 2, { NULL, false, false } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("set"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("!="), pargs, 2, { NULL, false, false } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     if (!sm_value_is_number(ret->data.cons->car) || !sm_value_is_number(ret->data.cons->cdr.data.cons->car))
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "= arguments must be numbers"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "!= arguments must be numbers"));
 
     SmNumber lhs = ret->data.cons->car.data.number;
     SmNumber rhs = ret->data.cons->cdr.data.cons->car.data.number;
@@ -1398,26 +1440,23 @@ SmError SM_BUILTIN_SYMBOL(neq)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i != rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f != rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
+        return_value(sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
-    return_nil_exit_frame(ctx, sm_ok);
+    return_nil(sm_ok);
 }
 
 SmError SM_BUILTIN_SYMBOL(lt)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { pargs, 2, { NULL, false, false } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("set"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("<"), pargs, 2, { NULL, false, false } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     if (!sm_value_is_number(ret->data.cons->car) || !sm_value_is_number(ret->data.cons->cdr.data.cons->car))
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "= arguments must be numbers"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "< arguments must be numbers"));
 
     SmNumber lhs = ret->data.cons->car.data.number;
     SmNumber rhs = ret->data.cons->cdr.data.cons->car.data.number;
@@ -1429,26 +1468,23 @@ SmError SM_BUILTIN_SYMBOL(lt)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i < rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f < rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
+        return_value(sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
-    return_nil_exit_frame(ctx, sm_ok);
+    return_nil(sm_ok);
 }
 
 SmError SM_BUILTIN_SYMBOL(lteq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { pargs, 2, { NULL, false, false } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("set"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring("<="), pargs, 2, { NULL, false, false } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     if (!sm_value_is_number(ret->data.cons->car) || !sm_value_is_number(ret->data.cons->cdr.data.cons->car))
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "= arguments must be numbers"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "<= arguments must be numbers"));
 
     SmNumber lhs = ret->data.cons->car.data.number;
     SmNumber rhs = ret->data.cons->cdr.data.cons->car.data.number;
@@ -1460,26 +1496,23 @@ SmError SM_BUILTIN_SYMBOL(lteq)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i <= rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f <= rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
+        return_value(sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
-    return_nil_exit_frame(ctx, sm_ok);
+    return_nil(sm_ok);
 }
 
 SmError SM_BUILTIN_SYMBOL(gt)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { pargs, 2, { NULL, false, false } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("set"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring(">"), pargs, 2, { NULL, false, false } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     if (!sm_value_is_number(ret->data.cons->car) || !sm_value_is_number(ret->data.cons->cdr.data.cons->car))
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "= arguments must be numbers"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, "> arguments must be numbers"));
 
     SmNumber lhs = ret->data.cons->car.data.number;
     SmNumber rhs = ret->data.cons->cdr.data.cons->car.data.number;
@@ -1491,26 +1524,23 @@ SmError SM_BUILTIN_SYMBOL(gt)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i > rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f > rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
+        return_value(sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
-    return_nil_exit_frame(ctx, sm_ok);
+    return_nil(sm_ok);
 }
 
 SmError SM_BUILTIN_SYMBOL(gteq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     const SmArgPatternArg pargs[] = { { NULL, true}, { NULL, true} };
-    SmArgPattern pattern = { pargs, 2, { NULL, false, false } };
-
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, sm_string_from_cstring("set"), sm_value_nil());
+    SmArgPattern pattern = { sm_string_from_cstring(">="), pargs, 2, { NULL, false, false } };
 
     SmError err = sm_arg_pattern_eval(&pattern, ctx, args, ret);
     if (!sm_is_ok(err))
-        return_nil_exit_frame(ctx, err);
+        return_nil(err);
 
     if (!sm_value_is_number(ret->data.cons->car) || !sm_value_is_number(ret->data.cons->cdr.data.cons->car))
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "= arguments must be numbers"));
+        return_nil(sm_error(ctx, SmErrorInvalidArgument, ">= arguments must be numbers"));
 
     SmNumber lhs = ret->data.cons->car.data.number;
     SmNumber rhs = ret->data.cons->cdr.data.cons->car.data.number;
@@ -1522,10 +1552,10 @@ SmError SM_BUILTIN_SYMBOL(gteq)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i >= rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f >= rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
+        return_value(sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
-    return_nil_exit_frame(ctx, sm_ok);
+    return_nil(sm_ok);
 }
 
 

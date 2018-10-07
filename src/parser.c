@@ -470,7 +470,7 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
                 *form = sm_value_nil();
             } else {
                 char buf[256];
-                SmCons* cons = sm_heap_alloc_cons(&ctx->heap, ctx->frame);
+                SmCons* cons = sm_heap_alloc_cons(&ctx->heap, ctx);
                 *form = sm_value_cons(cons);
 
                 while (tok.type != RParen && tok.type != End) {
@@ -502,7 +502,7 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
                             break;
                         }
                     } else if (tok.type != RParen && tok.type != End) {
-                        cons->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
+                        cons->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx));
                         cons = cons->cdr.data.cons;
                     }
                 }
@@ -549,14 +549,14 @@ SmError sm_parser_parse_all(SmParser* parser, SmContext* ctx, SmValue* list) {
         return sm_ok;
     }
 
-    SmCons* form = sm_heap_alloc_cons(&ctx->heap, ctx->frame);
+    SmCons* form = sm_heap_alloc_cons(&ctx->heap, ctx);
     *list = sm_value_cons(form);
 
     SmError err = sm_parser_parse_form(parser, ctx, &form->car);
 
     while (sm_is_ok(err) && !sm_parser_finished(parser))
     {
-        form->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx->frame));
+        form->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx));
         form = form->cdr.data.cons;
 
         err = sm_parser_parse_form(parser, ctx, &form->car);

@@ -55,7 +55,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
         }
 
         // Lookup variable in scope
-        SmVariable* scope_var = sm_scope_lookup(&ctx->frame->scope, form.data.symbol);
+        SmVariable* scope_var = sm_scope_lookup(ctx->scope, form.data.symbol);
         if (scope_var) {
             *ret = scope_var->value;
             return sm_ok;
@@ -95,33 +95,33 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
             // Call without evaluating arguments
             return ext_fn(ctx, call->cdr, ret);
 
-        fn = sm_heap_root(&ctx->heap);
+        fn = sm_heap_root_value(&ctx->heap);
 
         // Lookup function as external variable
         SmExternalVariable ext_var = sm_context_lookup_variable(ctx, call->car.data.symbol);
         if (ext_var) {
             SmError err = ext_var(ctx, fn);
             if (!sm_is_ok(err)) {
-                sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
+                sm_heap_root_value_drop(&ctx->heap, ctx, fn);
                 return err;
             }
         } else {
             // Lookup function as variable in scope
-            SmVariable* scope_var = sm_scope_lookup(&ctx->frame->scope, call->car.data.symbol);
+            SmVariable* scope_var = sm_scope_lookup(ctx->scope, call->car.data.symbol);
             if (!scope_var) {
                 snprintf(err_buf, sizeof(err_buf), "function not found: %.*s", (int) fn_name.length, fn_name.data);
-                sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
+                sm_heap_root_value_drop(&ctx->heap, ctx, fn);
                 return sm_error(ctx, SmErrorUndefinedVariable, err_buf);
             }
 
             *fn = scope_var->value;
         }
     } else {
-        fn = sm_heap_root(&ctx->heap);
+        fn = sm_heap_root_value(&ctx->heap);
 
         SmError err = sm_eval(ctx, call->car, fn);
         if (!sm_is_ok(err)) {
-            sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
+            sm_heap_root_value_drop(&ctx->heap, ctx, fn);
             return err;
         }
     }
@@ -132,7 +132,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
         strncmp(sm_symbol_str(fn->data.cons->car.data.symbol).data, "lambda", 6) != 0)
     {
         snprintf(err_buf, sizeof(err_buf), "%.*s is not a function", (int) fn_name.length, fn_name.data);
-        sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
+        sm_heap_root_value_drop(&ctx->heap, ctx, fn);
         return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
 
@@ -143,17 +143,13 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
     if (!sm_is_ok(err)) {
         snprintf(err_buf, sizeof(err_buf), "%.*s is not a valid function: %.*s",
                  (int) fn_name.length, fn_name.data, (int) err.message.length, err.message.data);
-        sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
+        sm_heap_root_value_drop(&ctx->heap, ctx, fn);
         return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
 
     // Call lambda function
-    SmStackFrame frame;
-    sm_context_enter_frame(ctx, &frame, fn_name, *fn);
-    sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
-
-    err = sm_invoke_lambda(ctx, sm_list_next(frame.fn.data.cons), call->cdr, ret);
-    sm_context_exit_frame(ctx);
+    err = sm_invoke_lambda(ctx, fn_name, sm_list_next(fn->data.cons), call->cdr, ret);
+    sm_heap_root_value_drop(&ctx->heap, ctx, fn);
 
     return err;
 }
@@ -169,18 +165,27 @@ SmError sm_validate_lambda(SmContext* ctx, SmValue args) {
     return sm_arg_pattern_validate_spec(ctx, args.data.cons->car);
 }
 
-SmError sm_invoke_lambda(SmContext* ctx, SmCons* lambda, SmValue args, SmValue* ret) {
-    // lambda should be a valid lambda expression (omitting the 'lambda' symbol)
+SmError sm_invoke_lambda(SmContext* ctx, SmString name, SmCons* lambda, SmValue args, SmValue* ret) {
+    // lambda must be a valid lambda expression (with the 'lambda' symbol omitted)
     // see sm_validate_lambda
 
-    SmArgPattern pattern = sm_arg_pattern_from_spec(lambda->car);
+    SmArgPattern pattern = sm_arg_pattern_from_spec(name, lambda->car);
+
+    SmScope** arg_scope = sm_heap_root_scope(&ctx->heap);
+    *arg_scope = sm_heap_alloc_scope(&ctx->heap, ctx, ctx->scope);
 
     // Unpack arguments into scope
-    SmError err = sm_arg_pattern_unpack(&pattern, ctx, args);
+    SmError err = sm_arg_pattern_unpack(&pattern, ctx, *arg_scope, args);
     sm_arg_pattern_drop(&pattern);
 
-    if (!sm_is_ok(err))
+    if (!sm_is_ok(err)) {
+        sm_heap_root_scope_drop(&ctx->heap, ctx, arg_scope);
         return err;
+    }
+
+    SmStackFrame frame;
+    sm_context_enter_frame(ctx, &frame, name);
+    ctx->scope = *arg_scope;
 
     // Return nil when code list is empty
     *ret = sm_value_nil();
@@ -190,8 +195,11 @@ SmError sm_invoke_lambda(SmContext* ctx, SmCons* lambda, SmValue args, SmValue* 
         *ret = sm_value_nil();
         err = sm_eval(ctx, code->car, ret);
         if (!sm_is_ok(err))
-            return err;
+            break;
     }
 
-    return sm_ok;
+    sm_context_exit_frame(ctx);
+    sm_heap_root_scope_drop(&ctx->heap, ctx, arg_scope);
+
+    return err;
 }
