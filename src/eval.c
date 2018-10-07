@@ -84,47 +84,57 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
 
     // Lists are interpreted as function/macro calls
     SmCons* call = form.data.cons;
+    SmString fn_name = sm_string_from_cstring("first element to call");
+    bool inline_fn = true;
+    SmValue* fn = NULL;
 
-    if (!sm_value_is_word(call->car) || sm_value_is_quoted(call->car)) {
-        return sm_error(ctx, SmErrorInvalidArgument, "function name must be an unquoted word");
-    }
+    if (sm_value_is_word(call->car) && sm_value_is_unquoted(call->car)) {
+        inline_fn = false;
+        fn_name = sm_word_str(call->car.data.word);
 
-    SmString fn_name = sm_word_str(call->car.data.word);
+        if (fn_name.length && fn_name.data[0] == ':') {
+            snprintf(err_buf, sizeof(err_buf), "keyword %.*s is not a valid function name", (int) fn_name.length, fn_name.data);
+            return sm_error(ctx, SmErrorInvalidArgument, err_buf);
+        }
 
-    if (fn_name.length && fn_name.data[0] == ':') {
-        snprintf(err_buf, sizeof(err_buf), "keyword %.*s is not a valid function name", (int) fn_name.length, fn_name.data);
-        return sm_error(ctx, SmErrorInvalidArgument, err_buf);
-    }
+        if (fn_name.length == 3 && strncmp(fn_name.data, "nil", 3) == 0)
+            return sm_error(ctx, SmErrorInvalidArgument, "nil is not a valid function name");
 
-    if (fn_name.length == 3 && strncmp(fn_name.data, "nil", 3) == 0)
-        return sm_error(ctx, SmErrorInvalidArgument, "nil is not a valid function name");
+        // Lookup external function
+        SmExternalFunction ext_fn = sm_context_lookup_function(ctx, call->car.data.word);
+        if (ext_fn)
+            // Call without evaluating arguments
+            return ext_fn(ctx, call->cdr, ret);
 
-    // Lookup external function
-    SmExternalFunction ext_fn = sm_context_lookup_function(ctx, call->car.data.word);
-    if (ext_fn)
-        // Call without evaluating arguments
-        return ext_fn(ctx, call->cdr, ret);
+        fn = sm_heap_root(&ctx->heap);
 
-    SmValue* fn = sm_heap_root(&ctx->heap);
+        // Lookup function as external variable
+        SmExternalVariable ext_var = sm_context_lookup_variable(ctx, call->car.data.word);
+        if (ext_var) {
+            SmError err = ext_var(ctx, fn);
+            if (!sm_is_ok(err)) {
+                sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
+                return err;
+            }
+        } else {
+            // Lookup function as variable in scope
+            SmVariable* scope_var = scope_lookup(ctx->frame, call->car.data.word);
+            if (!scope_var) {
+                snprintf(err_buf, sizeof(err_buf), "function not found: %.*s", (int) fn_name.length, fn_name.data);
+                sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
+                return sm_error(ctx, SmErrorUndefinedVariable, err_buf);
+            }
 
-    // Lookup function as external variable
-    SmExternalVariable ext_var = sm_context_lookup_variable(ctx, call->car.data.word);
-    if (ext_var) {
-        SmError err = ext_var(ctx, fn);
+            *fn = scope_var->value;
+        }
+    } else {
+        fn = sm_heap_root(&ctx->heap);
+
+        SmError err = sm_eval(ctx, call->car, fn);
         if (!sm_is_ok(err)) {
             sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
             return err;
         }
-    } else {
-        // Lookup function as variable in scope
-        SmVariable* scope_var = scope_lookup(ctx->frame, call->car.data.word);
-        if (!scope_var) {
-            snprintf(err_buf, sizeof(err_buf), "function not found: %.*s", (int) fn_name.length, fn_name.data);
-            sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
-            return sm_error(ctx, SmErrorUndefinedVariable, err_buf);
-        }
-
-        *fn = scope_var->value;
     }
 
     if (!sm_value_is_cons(*fn) || sm_value_is_quoted(*fn) ||
@@ -137,11 +147,14 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
         return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
 
+    if (inline_fn)
+        fn_name = sm_string_from_cstring("<lambda>");
+
     SmError err = sm_validate_lambda(ctx, fn->data.cons->cdr);
     if (!sm_is_ok(err)) {
         snprintf(err_buf, sizeof(err_buf), "%.*s is not a valid function: %.*s",
                  (int) fn_name.length, fn_name.data, (int) err.message.length, err.message.data);
-         sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
+        sm_heap_root_drop(&ctx->heap, ctx->frame, fn);
         return sm_error(ctx, SmErrorInvalidArgument, err_buf);
     }
 
