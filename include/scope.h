@@ -1,9 +1,11 @@
 #pragma once
 
 #include "rbtree.h"
+#include "symbol.h"
 #include "util.h"
 #include "value.h"
-#include "symbol.h"
+
+#include <stdbool.h>
 
 typedef struct SmScope {
     struct SmScope* parent;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "error.h"
 #include "context.h"
+#include "error.h"
 #include "value.h"
 
 void sm_register_builtins(SmContext* ctx);

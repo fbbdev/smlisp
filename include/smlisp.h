@@ -12,6 +12,6 @@
 #include "rbtree.h"
 #include "scope.h"
 #include "stack.h"
+#include "symbol.h"
 #include "util.h"
 #include "value.h"
-#include "symbol.h"

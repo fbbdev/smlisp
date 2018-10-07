@@ -1,8 +1,8 @@
 #pragma once
 
 #include "number.h"
-#include "util.h"
 #include "symbol.h"
+#include "util.h"
 
 #include <stdbool.h>
 #include <stdio.h>

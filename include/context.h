@@ -3,9 +3,9 @@
 #include "error.h"
 #include "heap.h"
 #include "stack.h"
+#include "symbol.h"
 #include "util.h"
 #include "value.h"
-#include "symbol.h"
 
 typedef struct SmContext {
     SmSymbolSet symbols;

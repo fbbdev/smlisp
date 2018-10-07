@@ -1,7 +1,7 @@
 #include "context.h"
 #include "parser.h"
-#include "value.h"
 #include "util.h"
+#include "value.h"
 
 #include <ctype.h>
 #include <stdarg.h>
