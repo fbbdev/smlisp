@@ -63,6 +63,8 @@ inline SmValue sm_value_symbol(SmSymbol symbol) {
 }
 
 inline SmValue sm_value_string(SmString view, char* buffer) {
+    sm_assert(view.length == 0 || view.data != NULL);
+    sm_assert(buffer == NULL || view.data >= buffer);
     return (SmValue){ SmTypeString, 0, { .string = { buffer, view } } };
 }
 
