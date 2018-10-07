@@ -14,7 +14,8 @@ typedef enum SmType {
     SmTypeNumber,
     SmTypeSymbol,
     SmTypeString,
-    SmTypeCons
+    SmTypeCons,
+    SmTypeFunction
 } SmType;
 
 typedef enum SmBuildOp {
@@ -31,11 +32,15 @@ typedef struct SmValue {
     union {
         SmNumber number;
         SmSymbol symbol;
+
         struct {
             char* buffer;
             SmString view;
         } string;
+
         struct SmCons* cons;
+
+        struct SmFunction* function;
     } data;
 } SmValue;
 
@@ -66,6 +71,11 @@ inline SmValue sm_value_cons(SmCons* cons) {
     return (SmValue){ SmTypeCons, 0, { .cons = cons } };
 }
 
+inline SmValue sm_value_function(struct SmFunction* function) {
+    sm_assert(function != NULL);
+    return (SmValue){ SmTypeFunction, 0, { .function = function } };
+}
+
 inline bool sm_value_is_nil(SmValue value) {
     return value.type == SmTypeNil;
 }
@@ -84,6 +94,10 @@ inline bool sm_value_is_string(SmValue value) {
 
 inline bool sm_value_is_cons(SmValue value) {
     return value.type == SmTypeCons;
+}
+
+inline bool sm_value_is_function(SmValue value) {
+    return value.type == SmTypeFunction;
 }
 
 inline bool sm_value_is_unquoted(SmValue value) {

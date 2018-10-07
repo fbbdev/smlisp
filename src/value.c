@@ -143,6 +143,11 @@ void sm_print_value(FILE* f, SmValue value) {
 
             fprintf(f, ")");
             break;
+
+        case SmTypeFunction:
+            fprintf(f, "; function");
+            break;
+
         default:
             break;
     }
