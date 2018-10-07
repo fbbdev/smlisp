@@ -9,8 +9,8 @@ SmContext* sm_context(SmGCConfig gc) {
     SmContext* ctx = sm_aligned_alloc(sm_alignof(SmContext), sizeof(SmContext));
 
     *ctx = (SmContext){
-        sm_word_set(),
-        sm_rbtree(sizeof(External), sm_alignof(External), sm_word_key, sm_key_compare_ptr),
+        sm_symbol_set(),
+        sm_rbtree(sizeof(External), sm_alignof(External), sm_symbol_key, sm_key_compare_ptr),
         sm_stack_frame(NULL, sm_string_from_cstring("<main>"), sm_value_nil()),
         &ctx->main,
         sm_heap(gc)
@@ -20,7 +20,7 @@ SmContext* sm_context(SmGCConfig gc) {
 }
 
 void sm_context_drop(SmContext* ctx) {
-    sm_word_set_drop(&ctx->words);
+    sm_symbol_set_drop(&ctx->symbols);
     sm_rbtree_drop(&ctx->externals);
     sm_stack_frame_drop(&ctx->main);
     sm_heap_drop(&ctx->heap);
@@ -28,26 +28,26 @@ void sm_context_drop(SmContext* ctx) {
 }
 
 // External management
-void sm_context_register_function(SmContext* ctx, SmWord id, SmExternalFunction fn) {
+void sm_context_register_function(SmContext* ctx, SmSymbol id, SmExternalFunction fn) {
     External b = { id, Function, { .function = fn } };
     sm_rbtree_insert(&ctx->externals, &b);
 }
 
-void sm_context_register_variable(SmContext* ctx, SmWord id, SmExternalVariable var) {
+void sm_context_register_variable(SmContext* ctx, SmSymbol id, SmExternalVariable var) {
     External b = { id, Variable, { .variable = var } };
     sm_rbtree_insert(&ctx->externals, &b);
 }
 
-void sm_context_unregister_external(SmContext* ctx, SmWord id) {
-    sm_rbtree_erase(&ctx->externals, sm_rbtree_find_by_key(&ctx->externals, sm_word_key(&id)));
+void sm_context_unregister_external(SmContext* ctx, SmSymbol id) {
+    sm_rbtree_erase(&ctx->externals, sm_rbtree_find_by_key(&ctx->externals, sm_symbol_key(&id)));
 }
 
-SmExternalFunction sm_context_lookup_function(SmContext* ctx, SmWord id) {
-    External* b = (External*) sm_rbtree_find_by_key(&ctx->externals, sm_word_key(&id));
+SmExternalFunction sm_context_lookup_function(SmContext* ctx, SmSymbol id) {
+    External* b = (External*) sm_rbtree_find_by_key(&ctx->externals, sm_symbol_key(&id));
     return (b && b->type == Function) ? b->fn.function : NULL;
 }
 
-SmExternalVariable sm_context_lookup_variable(SmContext* ctx, SmWord id) {
-    External* b = (External*) sm_rbtree_find_by_key(&ctx->externals, sm_word_key(&id));
+SmExternalVariable sm_context_lookup_variable(SmContext* ctx, SmSymbol id) {
+    External* b = (External*) sm_rbtree_find_by_key(&ctx->externals, sm_symbol_key(&id));
     return (b && b->type == Variable) ? b->fn.variable : NULL;
 }

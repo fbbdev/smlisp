@@ -5,10 +5,10 @@
 #include "stack.h"
 #include "util.h"
 #include "value.h"
-#include "word.h"
+#include "symbol.h"
 
 typedef struct SmContext {
-    SmWordSet words;
+    SmSymbolSet symbols;
 
     SmRBTree externals;
 
@@ -42,10 +42,10 @@ inline void sm_context_exit_frame(SmContext* ctx) {
 }
 
 // External management
-void sm_context_register_function(SmContext* ctx, SmWord id, SmExternalFunction fn);
-void sm_context_register_variable(SmContext* ctx, SmWord id, SmExternalVariable var);
+void sm_context_register_function(SmContext* ctx, SmSymbol id, SmExternalFunction fn);
+void sm_context_register_variable(SmContext* ctx, SmSymbol id, SmExternalVariable var);
 
-void sm_context_unregister_external(SmContext* ctx, SmWord id);
+void sm_context_unregister_external(SmContext* ctx, SmSymbol id);
 
-SmExternalFunction sm_context_lookup_function(SmContext* ctx, SmWord id);
-SmExternalVariable sm_context_lookup_variable(SmContext* ctx, SmWord id);
+SmExternalFunction sm_context_lookup_function(SmContext* ctx, SmSymbol id);
+SmExternalVariable sm_context_lookup_variable(SmContext* ctx, SmSymbol id);

@@ -3,12 +3,12 @@
 #include "error.h"
 #include "context.h"
 #include "value.h"
-#include "word.h"
+#include "symbol.h"
 
 #include <stdlib.h>
 
 typedef struct SmArgPatternArg {
-    SmWord id;
+    SmSymbol id;
     bool eval;
 } SmArgPatternArg;
 
@@ -17,7 +17,7 @@ typedef struct SmArgPattern {
     size_t count;
 
     struct {
-        SmWord id;
+        SmSymbol id;
         bool eval;
         bool use;
     } rest;

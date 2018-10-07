@@ -2,7 +2,7 @@
 
 #include "number.h"
 #include "util.h"
-#include "word.h"
+#include "symbol.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -12,7 +12,7 @@ struct SmContext;
 typedef enum SmType {
     SmTypeNil = 0,
     SmTypeNumber,
-    SmTypeWord,
+    SmTypeSymbol,
     SmTypeString,
     SmTypeCons
 } SmType;
@@ -30,7 +30,7 @@ typedef struct SmValue {
 
     union {
         SmNumber number;
-        SmWord word;
+        SmSymbol symbol;
         struct {
             char* buffer;
             SmString view;
@@ -53,8 +53,8 @@ inline SmValue sm_value_number(SmNumber number) {
     return (SmValue){ SmTypeNumber, 0, { .number = number } };
 }
 
-inline SmValue sm_value_word(SmWord word) {
-    return (SmValue){ SmTypeWord, 0, { .word = word } };
+inline SmValue sm_value_symbol(SmSymbol symbol) {
+    return (SmValue){ SmTypeSymbol, 0, { .symbol = symbol } };
 }
 
 inline SmValue sm_value_string(SmString view, char* buffer) {
@@ -74,8 +74,8 @@ inline bool sm_value_is_number(SmValue value) {
     return value.type == SmTypeNumber;
 }
 
-inline bool sm_value_is_word(SmValue value) {
-    return value.type == SmTypeWord;
+inline bool sm_value_is_symbol(SmValue value) {
+    return value.type == SmTypeSymbol;
 }
 
 inline bool sm_value_is_string(SmValue value) {

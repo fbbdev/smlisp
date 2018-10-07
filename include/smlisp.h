@@ -14,4 +14,4 @@
 #include "stack.h"
 #include "util.h"
 #include "value.h"
-#include "word.h"
+#include "symbol.h"

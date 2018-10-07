@@ -16,7 +16,7 @@ typedef enum TokenType {
     End = 0,
     Integer,
     Float,
-    Word,
+    Symbol,
     String,
     LParen,
     RParen,
@@ -213,12 +213,12 @@ static Token lexer_next(SmParser* parser) {
                     tok.type = Truncated;
                     tok.source.length += consume(parser, 1);
 
-                    // Everything between pipes is escaped and becomes a word
+                    // Everything between pipes is escaped and becomes a symbol
                     while (parser->source.length > 0 && *parser->source.data != '|')
                         tok.source.length += consume(parser, 1);
 
                     if (parser->source.length > 0)
-                        tok.type = Word; // Opening pipe has been matched
+                        tok.type = Symbol; // Opening pipe has been matched
                 }
 
                 tok.source.length += consume(parser, 1);
@@ -232,7 +232,7 @@ static Token lexer_next(SmParser* parser) {
         else if (valid_float(tok.source))
             tok.type = Float;
         else
-            tok.type = Word;
+            tok.type = Symbol;
     }
 
     return tok;
@@ -332,7 +332,7 @@ static SmError parse_float(SmParser const* parser, SmContext const* ctx, Token t
     return sm_ok;
 }
 
-static SmError parse_word(SmParser const* parser, SmContext* ctx, Token tok, SmWord* ret) {
+static SmError parse_symbol(SmParser const* parser, SmContext* ctx, Token tok, SmSymbol* ret) {
     sm_unused(parser);
 
     char* buf = sm_aligned_alloc(16, tok.source.length*sizeof(char));
@@ -348,7 +348,7 @@ static SmError parse_word(SmParser const* parser, SmContext* ctx, Token tok, SmW
         }
     }
 
-    *ret = sm_word(&ctx->words, (SmString){ buf, end - buf });
+    *ret = sm_symbol(&ctx->symbols, (SmString){ buf, end - buf });
     free(buf);
 
     return sm_ok;
@@ -405,7 +405,7 @@ static SmError parse_string(SmParser const* parser, SmContext* ctx, Token tok, S
         }
     }
 
-    *ret = sm_word_str(sm_word(&ctx->words, (SmString){ buf, end - buf }));
+    *ret = sm_symbol_str(sm_symbol(&ctx->symbols, (SmString){ buf, end - buf }));
     free(buf);
 
     return sm_ok;
@@ -450,9 +450,9 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
             err = parse_float(parser, ctx, tok, &form->data.number.value.f);
             break;
 
-        case Word:
-            *form = sm_value_word(NULL);
-            err = parse_word(parser, ctx, tok, &form->data.word);
+        case Symbol:
+            *form = sm_value_symbol(NULL);
+            err = parse_symbol(parser, ctx, tok, &form->data.symbol);
             break;
 
         case String:
@@ -484,7 +484,7 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
 
                         tok = lexer_peek(parser);
                         if (tok.type != Integer && tok.type != Float &&
-                            tok.type != Word && tok.type != LParen && tok.type != Quote)
+                            tok.type != Symbol && tok.type != LParen && tok.type != Quote)
                         {
                             err = parser_error(parser, tok, ctx, SmErrorSyntaxError, "form expected after dot");
                             break;

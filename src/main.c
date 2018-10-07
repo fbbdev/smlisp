@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
 
     SmContext* ctx = sm_context((SmGCConfig) { 64, 2, 64 });
     sm_register_builtins(ctx);
-    sm_context_register_function(ctx, sm_word(&ctx->words, sm_string_from_cstring("exit")), builtin_exit);
+    sm_context_register_function(ctx, sm_symbol(&ctx->symbols, sm_string_from_cstring("exit")), builtin_exit);
 
     if (argc < 2) {
         exit_code = interactive(ctx, progname);

@@ -12,22 +12,22 @@ static sm_thread_local char err_buf[1024];
 
 // Argument matching functions
 SmError sm_arg_pattern_validate_spec(SmContext* ctx, SmValue spec) {
-    if (!sm_value_is_word(spec) && !sm_value_is_list(spec)) {
-        return sm_error(ctx, SmErrorInvalidArgument, "argument pattern must be a word or unquoted list");
-    } else if (sm_value_is_word(spec)) {
+    if (!sm_value_is_symbol(spec) && !sm_value_is_list(spec)) {
+        return sm_error(ctx, SmErrorInvalidArgument, "argument pattern must be a symbol or unquoted list");
+    } else if (sm_value_is_symbol(spec)) {
         if (spec.quotes > 1)
             return sm_error(ctx, SmErrorInvalidArgument, "argument pattern quoted more than once");
     } else if (sm_value_is_quoted(spec)) {
         return sm_error(ctx, SmErrorInvalidArgument, "argument pattern cannot be a quoted list");
     } else {
         for (SmCons* arg = spec.data.cons; arg; arg = sm_list_next(arg)) {
-            if (!sm_value_is_word(arg->car) ||
-                    (!sm_value_is_word(arg->cdr) &&
+            if (!sm_value_is_symbol(arg->car) ||
+                    (!sm_value_is_symbol(arg->cdr) &&
                         (!sm_value_is_list(arg->cdr) || sm_value_is_quoted(arg->cdr))))
             {
-                return sm_error(ctx, SmErrorInvalidArgument, "argument pattern lists may contain only words");
-            } else if (arg->car.quotes > 1 || (sm_value_is_word(arg->cdr) && arg->cdr.quotes > 1)) {
-                return sm_error(ctx, SmErrorInvalidArgument, "word in argument pattern list quoted more than once");
+                return sm_error(ctx, SmErrorInvalidArgument, "argument pattern lists may only contain symbols");
+            } else if (arg->car.quotes > 1 || (sm_value_is_symbol(arg->cdr) && arg->cdr.quotes > 1)) {
+                return sm_error(ctx, SmErrorInvalidArgument, "symbol in argument pattern list quoted more than once");
             }
         }
     }
@@ -39,8 +39,8 @@ SmArgPattern sm_arg_pattern_from_spec(SmValue spec) {
     // Spec *must* be valid, otherwise this is UB. See sm_arg_pattern_validate_spec
     SmArgPattern pattern = { NULL, 0, { NULL, false, false } };
 
-    if (sm_value_is_word(spec)) {
-        pattern.rest.id = spec.data.word;
+    if (sm_value_is_symbol(spec)) {
+        pattern.rest.id = spec.data.symbol;
         pattern.rest.eval = sm_value_is_unquoted(spec);
         pattern.rest.use = true;
         return pattern;
@@ -54,11 +54,11 @@ SmArgPattern sm_arg_pattern_from_spec(SmValue spec) {
     pattern.args = args;
 
     for (SmCons* arg = spec.data.cons; arg; ++args, arg = sm_list_next(arg)) {
-        args->id = arg->car.data.word;
+        args->id = arg->car.data.symbol;
         args->eval = sm_value_is_unquoted(arg->car);
 
-        if (sm_value_is_word(arg->cdr)) {
-            pattern.rest.id = arg->cdr.data.word;
+        if (sm_value_is_symbol(arg->cdr)) {
+            pattern.rest.id = arg->cdr.data.symbol;
             pattern.rest.eval = sm_value_is_unquoted(arg->cdr);
             pattern.rest.use = true;
         }
@@ -79,7 +79,7 @@ SmError sm_arg_pattern_eval(SmArgPattern const* pattern, SmContext* ctx, SmValue
     // ret is a gc root so we use it for temporary storage
     if (!eval_dot) {
         *ret = dot;
-    } else if (!sm_value_is_word(dot) || sm_value_is_quoted(dot)) {
+    } else if (!sm_value_is_symbol(dot) || sm_value_is_quoted(dot)) {
         *ret = sm_value_unquote(dot, 1);
         eval_dot = false; // We don't need a root later so set eval_dot to false
     } else {
@@ -184,7 +184,7 @@ SmError sm_arg_pattern_unpack(SmArgPattern const* pattern, SmContext* ctx, SmVal
 
     // Eval dot part if we need more arguments or rest says so
     if (available < pattern->count || (pattern->rest.use && pattern->rest.eval)) {
-        if (!sm_value_is_word(dot) || sm_value_is_quoted(dot)) {
+        if (!sm_value_is_symbol(dot) || sm_value_is_quoted(dot)) {
             dot = sm_value_unquote(dot, 1);
         } else {
             dot_root = sm_heap_root(&ctx->heap);

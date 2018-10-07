@@ -7,7 +7,7 @@
 #include <string.h>
 
 // Private helpers
-static SmVariable* scope_lookup(SmStackFrame const* frame, SmWord id) {
+static SmVariable* scope_lookup(SmStackFrame const* frame, SmSymbol id) {
     for (; frame; frame = frame->parent) {
         SmVariable* var = sm_scope_get(&frame->scope, id);
         if (var)
@@ -31,11 +31,11 @@ static inline SmError exit_frame_pass_error(SmContext* ctx, SmError err) {
 void sm_register_builtins(SmContext* ctx) {
     #define REGISTER_BUILTIN_OP(symbol, id) \
         sm_context_register_function(\
-            ctx, sm_word(&ctx->words, sm_string_from_cstring(#id)), SM_BUILTIN_SYMBOL(symbol));
+            ctx, sm_symbol(&ctx->symbols, sm_string_from_cstring(#id)), SM_BUILTIN_SYMBOL(symbol));
     #define REGISTER_BUILTIN(id) REGISTER_BUILTIN_OP(id, id)
     #define REGISTER_BUILTIN_VAR(id) \
         sm_context_register_variable(\
-            ctx, sm_word(&ctx->words, sm_string_from_cstring(#id)), SM_BUILTIN_SYMBOL(id));
+            ctx, sm_symbol(&ctx->symbols, sm_string_from_cstring(#id)), SM_BUILTIN_SYMBOL(id));
 
     SM_BUILTIN_TABLE(REGISTER_BUILTIN, REGISTER_BUILTIN_OP, REGISTER_BUILTIN_VAR)
 
@@ -98,22 +98,22 @@ SmError SM_BUILTIN_SYMBOL(set)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_is_ok(err))
         return_nil_exit_frame(ctx, err);
 
-    if (!sm_value_is_word(ret->data.cons->car) || sm_value_is_quoted(ret->data.cons->car))
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "first argument to set must evaluate to an unquoted word"));
+    if (!sm_value_is_symbol(ret->data.cons->car) || sm_value_is_quoted(ret->data.cons->car))
+        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "first argument to set must evaluate to an unquoted symbol"));
 
-    SmString str = sm_word_str(ret->data.cons->car.data.word);
+    SmString str = sm_symbol_str(ret->data.cons->car.data.symbol);
     if (str.length && str.data[0] == ':')
-        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "keyword cannot be used as variable name"));
+        return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name"));
 
     if (str.length == 3 && strncmp(str.data, "nil", 3) == 0)
         return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name"));
 
-    SmVariable* var = scope_lookup(ctx->frame, ret->data.cons->car.data.word);
+    SmVariable* var = scope_lookup(ctx->frame, ret->data.cons->car.data.symbol);
     if (var) {
         var->value = ret->data.cons->cdr.data.cons->car;
     } else {
         sm_scope_set(&ctx->main.scope,
-            ret->data.cons->car.data.word,
+            ret->data.cons->car.data.symbol,
             ret->data.cons->cdr.data.cons->car);
     }
 
@@ -131,12 +131,12 @@ SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
             return sm_error(ctx, SmErrorInvalidArgument, "setq cannot accept a dotted argument list");
         else if (sm_value_is_nil(cons->cdr))
             return sm_error(ctx, SmErrorMissingArguments, "odd argument count given to setq");
-        else if (!sm_value_is_word(cons->car) || sm_value_is_quoted(cons->car))
-            return sm_error(ctx, SmErrorInvalidArgument, "odd arguments to setq must be unquoted words");
+        else if (!sm_value_is_symbol(cons->car) || sm_value_is_quoted(cons->car))
+            return sm_error(ctx, SmErrorInvalidArgument, "odd arguments to setq must be unquoted symbols");
 
-        SmString str = sm_word_str(cons->car.data.word);
+        SmString str = sm_symbol_str(cons->car.data.symbol);
         if (str.length && str.data[0] == ':')
-            return_nil(sm_error(ctx, SmErrorInvalidArgument, "keyword cannot be used as variable name"));
+            return_nil(sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name"));
 
         if (str.length == 3 && strncmp(str.data, "nil", 3) == 0)
             return_nil(sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name"));
@@ -145,11 +145,11 @@ SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
         if (!sm_is_ok(err))
             return_nil(err);
 
-        SmVariable* var = scope_lookup(ctx->frame, cons->car.data.word);
+        SmVariable* var = scope_lookup(ctx->frame, cons->car.data.symbol);
         if (var)
             var->value = *ret;
         else
-            sm_scope_set(&ctx->main.scope, cons->car.data.word, *ret);
+            sm_scope_set(&ctx->main.scope, cons->car.data.symbol, *ret);
 
         cons = sm_list_next(cons);
         if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
@@ -203,21 +203,21 @@ SmError SM_BUILTIN_SYMBOL(let)(SmContext* ctx, SmValue args, SmValue* ret) {
     for (SmCons* cons = args.data.cons->car.data.cons; cons; cons = sm_list_next(cons)) {
         if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
             return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let cannot accept a dotted binding list"));
-        else if ((!sm_value_is_word(cons->car) && !sm_value_is_cons(cons->car)) || sm_value_is_quoted(cons->car))
-            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or words"));
+        else if ((!sm_value_is_symbol(cons->car) && !sm_value_is_cons(cons->car)) || sm_value_is_quoted(cons->car))
+            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or symbols"));
         else if (sm_value_is_cons(cons->car)) {
             if (!sm_value_is_cons(cons->car.data.cons->cdr) || sm_value_is_quoted(cons->car.data.cons->cdr))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or words"));
+                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or symbols"));
             else if (!sm_value_is_nil(cons->car.data.cons->cdr.data.cons->cdr) || sm_value_is_quoted(cons->car.data.cons->cdr.data.cons->cdr))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or words"));
-            else if (!sm_value_is_word(cons->car.data.cons->car) || sm_value_is_quoted(cons->car.data.cons->car))
-                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "list elements in let binding lists must be (word expression) pairs"));
+                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "let binding lists may contain only unquoted 2-element lists or symbols"));
+            else if (!sm_value_is_symbol(cons->car.data.cons->car) || sm_value_is_quoted(cons->car.data.cons->car))
+                return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "list elements in let binding lists must be (symbol expression) pairs"));
         }
 
-        SmWord id = sm_value_is_word(cons->car) ? cons->car.data.word : cons->car.data.cons->car.data.word;
-        SmString str = sm_word_str(id);
+        SmSymbol id = sm_value_is_symbol(cons->car) ? cons->car.data.symbol : cons->car.data.cons->car.data.symbol;
+        SmString str = sm_symbol_str(id);
         if (str.length && str.data[0] == ':')
-            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "keyword cannot be used as variable name"));
+            return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "keysymbol cannot be used as variable name"));
 
         if (str.length == 3 && strncmp(str.data, "nil", 3) == 0)
             return_nil_exit_frame(ctx, sm_error(ctx, SmErrorInvalidArgument, "nil constant cannot be used as variable name"));
@@ -346,7 +346,7 @@ SmError SM_BUILTIN_SYMBOL(lambda)(SmContext* ctx, SmValue args, SmValue* ret) {
     SmCons* lambda = sm_heap_alloc_cons(&ctx->heap, ctx->frame);
     *ret = sm_value_cons(lambda);
 
-    lambda->car = sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda")));
+    lambda->car = sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda")));
     lambda->cdr = args;
 
     return sm_ok;
@@ -383,7 +383,7 @@ SmError SM_BUILTIN_SYMBOL(car)(SmContext* ctx, SmValue args, SmValue* ret) {
         return_nil(err);
 
     if (sm_value_is_quoted(*ret))
-        return_value(sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("quote"))));
+        return_value(sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("quote"))));
 
     if (!sm_value_is_list(*ret))
         return_nil(sm_error(ctx, SmErrorInvalidArgument, "car argument must be a list"));
@@ -425,19 +425,19 @@ SmError SM_BUILTIN_SYMBOL(cdr)(SmContext* ctx, SmValue args, SmValue* ret) {
 
 
 SmError SM_BUILTIN_SYMBOL(caar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
-                SmBuildCar, sm_value_word(lst),
+                SmBuildCar, sm_value_symbol(car),
+                SmBuildCar, sm_value_symbol(lst),
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
@@ -446,20 +446,20 @@ SmError SM_BUILTIN_SYMBOL(caar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cadr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
-                SmBuildCar, sm_value_word(lst),
+                SmBuildCar, sm_value_symbol(cdr),
+                SmBuildCar, sm_value_symbol(lst),
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
@@ -468,20 +468,20 @@ SmError SM_BUILTIN_SYMBOL(cadr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cdar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
-                SmBuildCar, sm_value_word(lst),
+                SmBuildCar, sm_value_symbol(car),
+                SmBuildCar, sm_value_symbol(lst),
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
@@ -490,19 +490,19 @@ SmError SM_BUILTIN_SYMBOL(cdar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cddr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
-                SmBuildCar, sm_value_word(lst),
+                SmBuildCar, sm_value_symbol(cdr),
+                SmBuildCar, sm_value_symbol(lst),
                 SmBuildEnd,
             SmBuildEnd,
         SmBuildEnd);
@@ -512,21 +512,21 @@ SmError SM_BUILTIN_SYMBOL(cddr)(SmContext* ctx, SmValue* ret) {
 
 
 SmError SM_BUILTIN_SYMBOL(caaar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
-                    SmBuildCar, sm_value_word(lst),
+                    SmBuildCar, sm_value_symbol(car),
+                    SmBuildCar, sm_value_symbol(lst),
                     SmBuildEnd,
                 SmBuildEnd,
             SmBuildEnd,
@@ -536,22 +536,22 @@ SmError SM_BUILTIN_SYMBOL(caaar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(caadr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
-                    SmBuildCar, sm_value_word(lst),
+                    SmBuildCar, sm_value_symbol(cdr),
+                    SmBuildCar, sm_value_symbol(lst),
                     SmBuildEnd,
                 SmBuildEnd,
             SmBuildEnd,
@@ -561,22 +561,22 @@ SmError SM_BUILTIN_SYMBOL(caadr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cadar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
-                    SmBuildCar, sm_value_word(lst),
+                    SmBuildCar, sm_value_symbol(car),
+                    SmBuildCar, sm_value_symbol(lst),
                     SmBuildEnd,
                 SmBuildEnd,
             SmBuildEnd,
@@ -586,22 +586,22 @@ SmError SM_BUILTIN_SYMBOL(cadar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cdaar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
-                    SmBuildCar, sm_value_word(lst),
+                    SmBuildCar, sm_value_symbol(car),
+                    SmBuildCar, sm_value_symbol(lst),
                     SmBuildEnd,
                 SmBuildEnd,
             SmBuildEnd,
@@ -611,22 +611,22 @@ SmError SM_BUILTIN_SYMBOL(cdaar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(caddr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
-                    SmBuildCar, sm_value_word(lst),
+                    SmBuildCar, sm_value_symbol(cdr),
+                    SmBuildCar, sm_value_symbol(lst),
                     SmBuildEnd,
                 SmBuildEnd,
             SmBuildEnd,
@@ -636,22 +636,22 @@ SmError SM_BUILTIN_SYMBOL(caddr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cddar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
-                    SmBuildCar, sm_value_word(lst),
+                    SmBuildCar, sm_value_symbol(car),
+                    SmBuildCar, sm_value_symbol(lst),
                     SmBuildEnd,
                 SmBuildEnd,
             SmBuildEnd,
@@ -661,22 +661,22 @@ SmError SM_BUILTIN_SYMBOL(cddar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cdadr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
-                    SmBuildCar, sm_value_word(lst),
+                    SmBuildCar, sm_value_symbol(cdr),
+                    SmBuildCar, sm_value_symbol(lst),
                     SmBuildEnd,
                 SmBuildEnd,
             SmBuildEnd,
@@ -686,21 +686,21 @@ SmError SM_BUILTIN_SYMBOL(cdadr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cdddr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
-                    SmBuildCar, sm_value_word(lst),
+                    SmBuildCar, sm_value_symbol(cdr),
+                    SmBuildCar, sm_value_symbol(lst),
                     SmBuildEnd,
                 SmBuildEnd,
             SmBuildEnd,
@@ -711,23 +711,23 @@ SmError SM_BUILTIN_SYMBOL(cdddr)(SmContext* ctx, SmValue* ret) {
 
 
 SmError SM_BUILTIN_SYMBOL(caaaar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
+                    SmBuildCar, sm_value_symbol(car),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(car),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(car),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -738,24 +738,24 @@ SmError SM_BUILTIN_SYMBOL(caaaar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(caaadr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
+                    SmBuildCar, sm_value_symbol(car),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(cdr),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(cdr),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -766,24 +766,24 @@ SmError SM_BUILTIN_SYMBOL(caaadr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(caadar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
+                    SmBuildCar, sm_value_symbol(cdr),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(car),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(car),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -794,24 +794,24 @@ SmError SM_BUILTIN_SYMBOL(caadar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cadaar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
+                    SmBuildCar, sm_value_symbol(car),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(car),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(car),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -822,24 +822,24 @@ SmError SM_BUILTIN_SYMBOL(cadaar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cdaaar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
+                    SmBuildCar, sm_value_symbol(car),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(car),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(car),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -850,24 +850,24 @@ SmError SM_BUILTIN_SYMBOL(cdaaar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(caaddr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
+                    SmBuildCar, sm_value_symbol(cdr),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(cdr),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(cdr),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -878,24 +878,24 @@ SmError SM_BUILTIN_SYMBOL(caaddr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(caddar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
+                    SmBuildCar, sm_value_symbol(cdr),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(car),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(car),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -906,24 +906,24 @@ SmError SM_BUILTIN_SYMBOL(caddar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cddaar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
+                    SmBuildCar, sm_value_symbol(car),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(car),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(car),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -934,24 +934,24 @@ SmError SM_BUILTIN_SYMBOL(cddaar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cadadr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
+                    SmBuildCar, sm_value_symbol(car),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(cdr),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(cdr),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -962,24 +962,24 @@ SmError SM_BUILTIN_SYMBOL(cadadr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cdadar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
+                    SmBuildCar, sm_value_symbol(cdr),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(car),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(car),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -990,24 +990,24 @@ SmError SM_BUILTIN_SYMBOL(cdadar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cdaadr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
+                    SmBuildCar, sm_value_symbol(car),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(cdr),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(cdr),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -1018,24 +1018,24 @@ SmError SM_BUILTIN_SYMBOL(cdaadr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cadddr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(car),
+            SmBuildCar, sm_value_symbol(car),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
+                    SmBuildCar, sm_value_symbol(cdr),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(cdr),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(cdr),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -1046,24 +1046,24 @@ SmError SM_BUILTIN_SYMBOL(cadddr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cdaddr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(car),
+                SmBuildCar, sm_value_symbol(car),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
+                    SmBuildCar, sm_value_symbol(cdr),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(cdr),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(cdr),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -1074,24 +1074,24 @@ SmError SM_BUILTIN_SYMBOL(cdaddr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cddadr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(car),
+                    SmBuildCar, sm_value_symbol(car),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(cdr),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(cdr),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -1102,24 +1102,24 @@ SmError SM_BUILTIN_SYMBOL(cddadr)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cdddar)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord car = sm_word(&ctx->words, sm_string_from_cstring("car"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol car = sm_symbol(&ctx->symbols, sm_string_from_cstring("car"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
+                    SmBuildCar, sm_value_symbol(cdr),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(car),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(car),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -1130,23 +1130,23 @@ SmError SM_BUILTIN_SYMBOL(cdddar)(SmContext* ctx, SmValue* ret) {
 }
 
 SmError SM_BUILTIN_SYMBOL(cddddr)(SmContext* ctx, SmValue* ret) {
-    SmWord lst = sm_word(&ctx->words, sm_string_from_cstring("lst"));
-    SmWord cdr = sm_word(&ctx->words, sm_string_from_cstring("cdr"));
+    SmSymbol lst = sm_symbol(&ctx->symbols, sm_string_from_cstring("lst"));
+    SmSymbol cdr = sm_symbol(&ctx->symbols, sm_string_from_cstring("cdr"));
 
     sm_build_list(ctx, ret,
-        SmBuildCar, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring("lambda"))),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("lambda"))),
         SmBuildList,
-            SmBuildCar, sm_value_word(lst),
+            SmBuildCar, sm_value_symbol(lst),
             SmBuildEnd,
         SmBuildList,
-            SmBuildCar, sm_value_word(cdr),
+            SmBuildCar, sm_value_symbol(cdr),
             SmBuildList,
-                SmBuildCar, sm_value_word(cdr),
+                SmBuildCar, sm_value_symbol(cdr),
                 SmBuildList,
-                    SmBuildCar, sm_value_word(cdr),
+                    SmBuildCar, sm_value_symbol(cdr),
                     SmBuildList,
-                        SmBuildCar, sm_value_word(cdr),
-                        SmBuildCar, sm_value_word(lst),
+                        SmBuildCar, sm_value_symbol(cdr),
+                        SmBuildCar, sm_value_symbol(lst),
                         SmBuildEnd,
                     SmBuildEnd,
                 SmBuildEnd,
@@ -1377,7 +1377,7 @@ SmError SM_BUILTIN_SYMBOL(eq)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i == rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f == rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring(":true"))));
+        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
     return_nil_exit_frame(ctx, sm_ok);
@@ -1408,7 +1408,7 @@ SmError SM_BUILTIN_SYMBOL(neq)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i != rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f != rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring(":true"))));
+        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
     return_nil_exit_frame(ctx, sm_ok);
@@ -1439,7 +1439,7 @@ SmError SM_BUILTIN_SYMBOL(lt)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i < rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f < rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring(":true"))));
+        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
     return_nil_exit_frame(ctx, sm_ok);
@@ -1470,7 +1470,7 @@ SmError SM_BUILTIN_SYMBOL(lteq)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i <= rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f <= rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring(":true"))));
+        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
     return_nil_exit_frame(ctx, sm_ok);
@@ -1501,7 +1501,7 @@ SmError SM_BUILTIN_SYMBOL(gt)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i > rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f > rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring(":true"))));
+        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
     return_nil_exit_frame(ctx, sm_ok);
@@ -1532,7 +1532,7 @@ SmError SM_BUILTIN_SYMBOL(gteq)(SmContext* ctx, SmValue args, SmValue* ret) {
     if ((sm_number_is_int(lhs) && lhs.value.i >= rhs.value.i) ||
         (sm_number_is_float(lhs) && lhs.value.f >= rhs.value.f))
     {
-        return_value_exit_frame(ctx, sm_value_word(sm_word(&ctx->words, sm_string_from_cstring(":true"))));
+        return_value_exit_frame(ctx, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))));
     }
 
     return_nil_exit_frame(ctx, sm_ok);
@@ -1554,7 +1554,7 @@ SmError SM_BUILTIN_SYMBOL(not)(SmContext* ctx, SmValue args, SmValue* ret) {
         return_nil(err);
 
     *ret = sm_value_is_nil(*ret) ?
-        sm_value_word(sm_word(&ctx->words, sm_string_from_cstring(":true"))) : sm_value_nil();
+        sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true"))) : sm_value_nil();
 
     return sm_ok;
 }
@@ -1566,7 +1566,7 @@ SmError SM_BUILTIN_SYMBOL(and)(SmContext* ctx, SmValue args, SmValue* ret) {
     SmError err = sm_ok;
 
     // Return true when code list is empty
-    *ret = sm_value_word(sm_word(&ctx->words, sm_string_from_cstring(":true")));
+    *ret = sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true")));
 
     // Run each form in code list, return result of last one unless a previous one returns nil
     for (SmCons* arg = args.data.cons; arg; arg = sm_list_next(arg)) {

@@ -8,7 +8,7 @@ typedef enum Type {
 } Type;
 
 typedef struct External {
-    SmWord id;
+    SmSymbol id;
     Type type;
     union {
         SmExternalFunction function;

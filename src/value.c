@@ -10,12 +10,12 @@
 // Inlines
 extern inline SmValue sm_value_nil();
 extern inline SmValue sm_value_number(SmNumber number);
-extern inline SmValue sm_value_word(SmWord word);
+extern inline SmValue sm_value_symbol(SmSymbol symbol);
 extern inline SmValue sm_value_string(SmString view, char* buffer);
 extern inline SmValue sm_value_cons(SmCons* cons);
 extern inline bool sm_value_is_nil(SmValue value);
 extern inline bool sm_value_is_number(SmValue value);
-extern inline bool sm_value_is_word(SmValue value);
+extern inline bool sm_value_is_symbol(SmValue value);
 extern inline bool sm_value_is_string(SmValue value);
 extern inline bool sm_value_is_cons(SmValue value);
 extern inline bool sm_value_is_unquoted(SmValue value);
@@ -30,7 +30,7 @@ extern inline bool sm_list_is_dotted(SmCons* cons);
 extern inline size_t sm_list_size(SmCons* cons);
 
 // Private helpers
-static bool is_piped_word(SmString str) {
+static bool is_piped_symbol(SmString str) {
     if (str.length == 0)
         return true;
 
@@ -95,10 +95,10 @@ void sm_print_value(FILE* f, SmValue value) {
                 fprintf(f, "%f", value.data.number.value.f);
             break;
 
-        case SmTypeWord:
-            str = sm_word_str(value.data.word);
+        case SmTypeSymbol:
+            str = sm_symbol_str(value.data.symbol);
 
-            bool piped = is_piped_word(str);
+            bool piped = is_piped_symbol(str);
             if (piped)
                 fprintf(f, "|");
 
