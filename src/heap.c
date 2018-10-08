@@ -25,6 +25,15 @@ static inline Object* object_new(Object* next, Type type, size_t size) {
     return obj;
 }
 
+static inline void object_drop(Object* obj) {
+    if (obj->type == Scope)
+        sm_scope_drop(&obj->data.scope);
+    else if (obj->type == Function)
+        sm_function_drop(&obj->data.function);
+
+    free(obj);
+}
+
 static inline Object* object_from_pointer(Type type, void const* ptr) {
     const size_t offset =
         (type == Cons) ? offsetof(union Data, cons)
@@ -86,7 +95,7 @@ static void gc_mark(Object* obj) {
 void sm_heap_drop(SmHeap* heap) {
     for (Object *obj = heap->objects, *next; obj; obj = next) {
         next = obj->next;
-        free(obj);
+        object_drop(obj);
     }
 
     for (Root *r = heap->roots, *next; r; r = next) {
@@ -263,9 +272,8 @@ void sm_heap_gc(SmHeap* heap, SmContext const* ctx) {
         if (!obj->marked) {
             *objp = obj->next; // Update list
             --heap->gc.object_count;
-            if (obj->type == Scope)
-                sm_scope_drop(&obj->data.scope);
-            free(obj);
+
+            object_drop(obj);
         } else {
             obj->marked = false;
             objp = &obj->next;

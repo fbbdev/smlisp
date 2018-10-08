@@ -42,6 +42,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
             SmSymbol args = sm_symbol(&ctx->symbols, sm_string_from_cstring("args"));
 
             sm_build_list(ctx, ret,
+                SmBuildCar, sm_value_quote(sm_value_symbol(args), 1),
                 SmBuildList,
                     SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring("eval"))),
                     SmBuildList,
@@ -53,11 +54,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
                 SmBuildEnd);
 
             SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
-            *fn = (SmFunction){
-                { var_name, NULL, 0, { args, false, true } },
-                NULL,
-                ret->data.cons,
-            };
+            *fn = sm_function(var_name, NULL, ret->data.cons);
             *ret = sm_value_function(fn);
             return sm_ok;
         }
