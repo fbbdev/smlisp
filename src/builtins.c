@@ -77,7 +77,7 @@ SmError SM_BUILTIN_SYMBOL(set)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ "set", 3 },
+        { "set", 3 },
         pargs, 2, { NULL, false, false }
     };
 
@@ -447,7 +447,7 @@ SmError SM_BUILTIN_SYMBOL(cons)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ "cons", 4 },
+        { "cons", 4 },
         pargs, 2, { NULL, false, false }
     };
 
@@ -464,7 +464,7 @@ SmError SM_BUILTIN_SYMBOL(cons)(SmContext* ctx, SmValue args, SmValue* ret) {
 SmError SM_BUILTIN_SYMBOL(list)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Optional argument list, evaluated
     static const SmArgPattern pattern = {
-        (SmString){ "list", 4 },
+        { "list", 4 },
         NULL, 0, { NULL, true, true }
     };
 
@@ -480,7 +480,7 @@ SmError SM_BUILTIN_SYMBOL(list_dot)(SmContext* ctx, SmValue args, SmValue* ret) 
     // One required argument plus optional argument list, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ "list*", 5 },
+        { "list*", 5 },
         pargs, 1, { NULL, true, true }
     };
 
@@ -1493,7 +1493,7 @@ SmError SM_BUILTIN_SYMBOL(cddddr)(SmContext* ctx, SmValue* ret) {
 SmError SM_BUILTIN_SYMBOL(add)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Optional argument list, evaluated
     static const SmArgPattern pattern = {
-        (SmString){ "+", 1 },
+        { "+", 1 },
         NULL, 0, { NULL, true, true }
     };
 
@@ -1534,7 +1534,7 @@ SmError SM_BUILTIN_SYMBOL(sub)(SmContext* ctx, SmValue args, SmValue* ret) {
     // One required argument plus optional argument list, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ "-", 1 },
+        { "-", 1 },
         pargs, 1, { NULL, true, true }
     };
 
@@ -1590,7 +1590,7 @@ SmError SM_BUILTIN_SYMBOL(sub)(SmContext* ctx, SmValue args, SmValue* ret) {
 SmError SM_BUILTIN_SYMBOL(mul)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Optional argument list, evaluated
     static const SmArgPattern pattern = {
-        (SmString){ "*", 1 },
+        { "*", 1 },
         NULL, 0, { NULL, true, true }
     };
 
@@ -1631,7 +1631,7 @@ SmError SM_BUILTIN_SYMBOL(div)(SmContext* ctx, SmValue args, SmValue* ret) {
     // One required argument plus optional argument list, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ "/", 1 },
+        { "/", 1 },
         pargs, 1, { NULL, true, true }
     };
 
@@ -1689,7 +1689,7 @@ SmError SM_BUILTIN_SYMBOL(eq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ "=", 1 },
+        { "=", 1 },
         pargs, 2, { NULL, false, false }
     };
 
@@ -1720,7 +1720,7 @@ SmError SM_BUILTIN_SYMBOL(neq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ "!=", 2 },
+        { "!=", 2 },
         pargs, 2, { NULL, false, false }
     };
 
@@ -1751,7 +1751,7 @@ SmError SM_BUILTIN_SYMBOL(lt)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ "<", 1 },
+        { "<", 1 },
         pargs, 2, { NULL, false, false }
     };
 
@@ -1782,7 +1782,7 @@ SmError SM_BUILTIN_SYMBOL(lteq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ "<=", 2 },
+        { "<=", 2 },
         pargs, 2, { NULL, false, false }
     };
 
@@ -1813,7 +1813,7 @@ SmError SM_BUILTIN_SYMBOL(gt)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ ">", 1 },
+        { ">", 1 },
         pargs, 2, { NULL, false, false }
     };
 
@@ -1844,7 +1844,7 @@ SmError SM_BUILTIN_SYMBOL(gteq)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ ">=", 2 },
+        { ">=", 2 },
         pargs, 2, { NULL, false, false }
     };
 
