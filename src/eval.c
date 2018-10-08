@@ -54,7 +54,7 @@ SmError sm_eval(SmContext* ctx, SmValue form, SmValue* ret) {
                 SmBuildEnd);
 
             SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
-            *fn = sm_function(var_name, NULL, ret->data.cons);
+            *fn = sm_function(var_name, ctx->scope, ret->data.cons);
             *ret = sm_value_function(fn);
             return sm_ok;
         }
