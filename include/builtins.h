@@ -14,11 +14,15 @@ void sm_register_builtins(SmContext* ctx);
 \
     builtin(set) \
     builtin(setq) \
+    builtin(del) \
+    builtin_op(is_set, is-set) \
 \
     builtin(progn) \
     builtin(let) \
     builtin_op(let_serial, let*) \
     builtin(if) \
+\
+    builtin_op(ignore_errors, ignore-errors) \
 \
     builtin(cons) \
     builtin(list) \

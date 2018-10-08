@@ -11,6 +11,9 @@
 #define return_value(value) return ((*ret = (value)), (sm_ok))
 #define return_nil(err) return ((*ret = sm_value_nil()), (err))
 
+// Error message buffer
+static sm_thread_local char err_buf[1024];
+
 // Builtin registration
 void sm_register_builtins(SmContext* ctx) {
     #define REGISTER_BUILTIN_OP(symbol, id) \
@@ -74,7 +77,7 @@ SmError SM_BUILTIN_SYMBOL(set)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };
     static const SmArgPattern pattern = {
-        (SmString){ "str", 3 },
+        (SmString){ "set", 3 },
         pargs, 2, { NULL, false, false }
     };
 
@@ -145,10 +148,71 @@ SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
     return sm_ok;
 }
 
+SmError SM_BUILTIN_SYMBOL(del)(SmContext* ctx, SmValue args, SmValue* ret) {
+    if (!sm_value_is_list(args) || sm_value_is_quoted(args) || !sm_value_is_nil(sm_list_dot(args.data.cons)))
+        return sm_error(ctx, SmErrorInvalidArgument, "del cannot accept a dotted argument list");
+    else if (sm_value_is_nil(args))
+        return sm_error(ctx, SmErrorMissingArguments, "del requires at least 1 argument");
+
+    for (SmCons* cons = args.data.cons; cons; cons = sm_list_next(cons)) {
+        if (!sm_value_is_symbol(cons->car) || sm_value_is_quoted(cons->car)) {
+            *ret = sm_value_nil();
+            return sm_error(ctx, SmErrorInvalidArgument, "arguments to del must be unquoted symbols");
+        }
+
+        SmScope* scope = ctx->scope;
+        SmVariable* var = sm_scope_get(scope, cons->car.data.symbol);
+
+        while (!var && scope->parent) {
+            scope = scope->parent;
+            var = sm_scope_get(scope, cons->car.data.symbol);
+        }
+
+        if (!var) {
+            *ret = sm_value_nil();
+            snprintf(err_buf, sizeof(err_buf), "del: variable not found: %.*s",
+                (int) sm_symbol_str(cons->car.data.symbol).length,
+                sm_symbol_str(cons->car.data.symbol).data);
+            return sm_error(ctx, SmErrorUndefinedVariable, err_buf);
+        }
+
+        *ret = var->value;
+        sm_scope_delete(scope, cons->car.data.symbol);
+
+        sm_heap_unref(&ctx->heap, ctx, 1);
+    }
+
+    return sm_ok;
+}
+
+SmError SM_BUILTIN_SYMBOL(is_set)(SmContext* ctx, SmValue args, SmValue* ret) {
+    if (!sm_value_is_list(args) || sm_value_is_quoted(args))
+        return sm_error(ctx, SmErrorInvalidArgument, "is-set cannot accept a dotted argument list");
+    else if (sm_value_is_nil(args))
+        return sm_error(ctx, SmErrorMissingArguments, "is-set requires exactly 1 argument");
+    else if (!sm_value_is_list(args.data.cons->cdr) || sm_value_is_quoted(args.data.cons->cdr))
+        return sm_error(ctx, SmErrorInvalidArgument, "is-set cannot accept a dotted argument list");
+    else if (!sm_value_is_nil(args.data.cons->cdr))
+        return sm_error(ctx, SmErrorExcessArguments, "is-set requires exactly 1 argument");
+    else if (!sm_value_is_symbol(args.data.cons->car) || sm_value_is_quoted(args.data.cons->car))
+        return sm_error(ctx, SmErrorInvalidArgument, "is-set expects a single unquoted symbol as argument");
+
+    *ret = sm_value_nil();
+
+    if (sm_scope_lookup(ctx->scope, args.data.cons->car.data.symbol))
+        *ret = sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":true")));
+
+    return sm_ok;
+}
+
 
 SmError SM_BUILTIN_SYMBOL(progn)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_value_is_list(args) || sm_value_is_quoted(args))
-        return sm_error(ctx, SmErrorMissingArguments, "progn cannot accept a dotted code list");
+        return sm_error(ctx, SmErrorInvalidArgument, "progn cannot accept a dotted code list");
+
+    SmValue dot = sm_list_dot(args.data.cons);
+    if (!sm_value_is_nil(dot) || sm_value_is_quoted(dot))
+        return sm_error(ctx, SmErrorInvalidArgument, "progn cannot accept a dotted code list");
 
     SmError err = sm_ok;
 
@@ -157,9 +221,6 @@ SmError SM_BUILTIN_SYMBOL(progn)(SmContext* ctx, SmValue args, SmValue* ret) {
 
     // Run each form in code list, return result of last one
     for (SmCons* code = args.data.cons; code; code = sm_list_next(code)) {
-        if (!sm_value_is_list(code->cdr) || sm_value_is_quoted(code->cdr))
-            return_nil(sm_error(ctx, SmErrorInvalidArgument, "progn cannot accept a dotted code list"));
-
         *ret = sm_value_nil();
         err = sm_eval(ctx, code->car, ret);
         if (!sm_is_ok(err))
@@ -338,6 +399,47 @@ SmError SM_BUILTIN_SYMBOL(if)(SmContext* ctx, SmValue args, SmValue* ret) {
     }
 
     return_nil(sm_ok);
+}
+
+
+SmError SM_BUILTIN_SYMBOL(ignore_errors)(SmContext* ctx, SmValue args, SmValue* ret) {
+    if (!sm_value_is_list(args) || sm_value_is_quoted(args))
+        return sm_error(ctx, SmErrorInvalidArgument, "ignore-errors cannot accept a dotted code list");
+
+    SmValue dot = sm_list_dot(args.data.cons);
+    if (!sm_value_is_nil(dot) || sm_value_is_quoted(dot))
+        return sm_error(ctx, SmErrorInvalidArgument, "ignore-errors cannot accept a dotted code list");
+
+    SmError err = sm_ok;
+
+    // Return nil when code list is empty
+    *ret = sm_value_nil();
+
+    // Run each form in code list, return result of last one or error
+    for (SmCons* code = args.data.cons; code; code = sm_list_next(code)) {
+        *ret = sm_value_nil();
+        err = sm_eval(ctx, code->car, ret);
+        if (!sm_is_ok(err)) {
+            SmString str = sm_error_code_string(err.code);
+
+            char err_code[str.length + 2];
+            err_code[0] = ':';
+            strncpy(&err_code[1], str.data, str.length);
+            err_code[str.length + 1] = '\0';
+
+            char* err_msg = sm_heap_alloc_string(&ctx->heap, ctx, err.message.length);
+            strncpy(err_msg, err.message.data, err.message.length);
+
+            sm_build_list(ctx, ret,
+                SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":error"))),
+                SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(err_code))),
+                SmBuildCar, sm_value_string((SmString){ err_msg, err.message.length }, err_msg),
+                SmBuildEnd);
+            break;
+        }
+    }
+
+    return sm_ok;
 }
 
 
