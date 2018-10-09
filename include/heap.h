@@ -19,7 +19,7 @@ typedef struct SmHeap {
         SmGCConfig config;
         size_t object_count;
         size_t object_threshold;
-        uint16_t unref_count;
+        size_t unref_count;
     } gc;
 } SmHeap;
 
@@ -33,16 +33,17 @@ inline size_t sm_heap_size(SmHeap const* heap) {
     return heap->gc.object_count;
 }
 
+SmSymbol sm_heap_alloc_symbol(SmHeap* heap, struct SmContext const* ctx);
 SmCons* sm_heap_alloc_cons(SmHeap* heap, struct SmContext const* ctx);
 struct SmScope* sm_heap_alloc_scope(SmHeap* heap, struct SmContext const* ctx);
 struct SmFunction* sm_heap_alloc_function(SmHeap* heap, struct SmContext const* ctx);
 char* sm_heap_alloc_string(SmHeap* heap, struct SmContext const* ctx, size_t length);
 
+void** sm_heap_root(SmHeap* heap);
 SmValue* sm_heap_root_value(SmHeap* heap);
-struct SmScope** sm_heap_root_scope(SmHeap* heap);
+void sm_heap_root_drop(SmHeap* heap, struct SmContext const* ctx, void** root);
 void sm_heap_root_value_drop(SmHeap* heap, struct SmContext const* ctx, SmValue* root);
-void sm_heap_root_scope_drop(SmHeap* heap, struct SmContext const* ctx, struct SmScope** root);
 
-void sm_heap_unref(SmHeap* heap, struct SmContext const* ctx, uint8_t count);
+void sm_heap_unref(SmHeap* heap, struct SmContext const* ctx, size_t count);
 
 void sm_heap_gc(SmHeap* heap, struct SmContext const* ctx);

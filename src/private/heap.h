@@ -17,12 +17,11 @@
 #endif
 
 typedef enum Type {
-    Cons = 0,
+    Symbol = 0,
+    Cons,
     Scope,
     Function,
-    String,
-
-    Value = Cons
+    String
 } Type;
 
 // Objects implement an AVL augmented tree
@@ -39,6 +38,7 @@ typedef struct SmHeapObject {
     size_t size;
 
     union Data {
+        SmString symbol;
         SmCons cons;
         SmScope scope;
         SmFunction function;
@@ -52,10 +52,10 @@ typedef struct SmHeapRoot {
     struct SmHeapRoot* next;
     struct SmHeapRoot* prev;
 
-    Type type;
+    bool value : 1;
 
-    union Ptr {
+    union Ref {
         SmValue value;
-        SmScope* scope;
-    } ptr;
+        void* any;
+    } ref;
 } Root;

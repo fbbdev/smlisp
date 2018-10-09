@@ -29,6 +29,9 @@ static Object* object_new(Type type, size_t size) {
     };
 
     switch (type) {
+        case Symbol:
+            obj->data.symbol = (SmString){ NULL, 0 };
+            break;
         case Cons:
             obj->data.cons = (SmCons){ sm_value_nil(), sm_value_nil() };
             break;
@@ -230,7 +233,7 @@ static void object_erase(Object** root, Object* obj) {
     }
 }
 
-static Object* object_from_pointer(Object* root, void const* ptr) {
+static Object* object_from_pointer(Object* root, void const* ptr, bool find) {
     Object* obj = root;
     const uintptr_t key = (uintptr_t) ptr;
 
@@ -239,7 +242,7 @@ static Object* object_from_pointer(Object* root, void const* ptr) {
 
     // Tree lookup for an object containing this pointer
     while (obj) {
-        if (obj->all_marked)
+        if (obj->all_marked && !find)
             return NULL;
 
         const uintptr_t start = (uintptr_t) obj;
@@ -293,30 +296,26 @@ static Object* object_succ(Object* obj) {
     return obj->parent;
 }
 
-static inline Root* root_from_pointer(Type type, void const* ptr) {
-    const size_t offset =
-        (type == Value) ? offsetof(union Ptr, value)
-      : (type == Scope) ? offsetof(union Ptr, scope)
-      : 0;
-
-    return (Root*) (((uint8_t*) ptr) - offsetof(Root, ptr) - offset);
+static inline Root* root_from_pointer(bool value, void const* ptr) {
+    return (Root*) (((uint8_t*) ptr) - offsetof(Root, ref) -
+        (value ? offsetof(union Ref, value) : offsetof(union Ref, any)));
 }
 
 static void gc_mark(Object* root, Object* obj);
 
-static inline void gc_mark_value(Object* root, SmValue value) {
+static void gc_mark_value(Object* root, SmValue value) {
     switch (value.type) {
         case SmTypeSymbol:
-            gc_mark(root, object_from_pointer(root, value.data.symbol));
+            gc_mark(root, object_from_pointer(root, value.data.symbol, false));
             break;
         case SmTypeString:
-            gc_mark(root, object_from_pointer(root, value.data.string.view.data));
+            gc_mark(root, object_from_pointer(root, value.data.string.view.data, false));
             break;
         case SmTypeCons:
-            gc_mark(root, object_from_pointer(root, value.data.cons));
+            gc_mark(root, object_from_pointer(root, value.data.cons, false));
             break;
         case SmTypeFunction:
-            gc_mark(root, object_from_pointer(root, value.data.function));
+            gc_mark(root, object_from_pointer(root, value.data.function, false));
             break;
         default:
             break;
@@ -340,25 +339,35 @@ static void gc_mark(Object* root, Object* obj) {
             }
         }
 
-        if (obj->type == Cons) {
-            gc_mark_value(root, obj->data.cons.car);
+        switch (obj->type) {
+            case Symbol:
+                obj = object_from_pointer(root, obj->data.symbol.data, false);
+                break;
 
-            if (sm_value_is_cons(obj->data.cons.cdr) && obj->data.cons.cdr.data.cons)
-                obj = object_from_pointer(root, obj->data.cons.cdr.data.cons);
-            else
-                gc_mark_value(root, obj->data.cons.cdr);
-        } else if (obj->type == Scope) {
-            for (SmVariable* var = sm_scope_first(&obj->data.scope); var; var = sm_scope_next(&obj->data.scope, var))
-                gc_mark_value(root, var->value);
+            case Cons:
+                gc_mark_value(root, obj->data.cons.car);
 
-            if (obj->data.scope.parent)
-                gc_mark(root, object_from_pointer(root, obj->data.scope.parent));
-        } else if (obj->type == Function) {
-            if (obj->data.function.capture)
-                gc_mark(root, object_from_pointer(root, obj->data.function.capture));
+                if (sm_value_is_cons(obj->data.cons.cdr))
+                    obj = object_from_pointer(root, obj->data.cons.cdr.data.cons, false);
+                else
+                    gc_mark_value(root, obj->data.cons.cdr);
 
-            if (obj->data.function.progn)
-                obj = object_from_pointer(root, obj->data.function.progn);
+                break;
+
+            case Scope:
+                for (SmVariable* var = sm_scope_first(&obj->data.scope); var; var = sm_scope_next(&obj->data.scope, var))
+                    gc_mark_value(root, var->value);
+
+                obj = object_from_pointer(root, obj->data.scope.parent, false);
+                break;
+
+            case Function:
+                gc_mark(root, object_from_pointer(root, obj->data.function.capture, false));
+                obj = object_from_pointer(root, obj->data.function.progn, false);
+                break;
+
+            default:
+                break;
         }
     }
 }
@@ -381,6 +390,18 @@ void sm_heap_drop(SmHeap* heap) {
     // Reset gc status
     heap->gc.object_count = heap->gc.unref_count = 0;
     heap->gc.object_threshold = heap->gc.config.object_threshold;
+}
+
+SmSymbol sm_heap_alloc_symbol(SmHeap* heap, SmContext const* ctx) {
+    if (should_collect(&heap->gc))
+        sm_heap_gc(heap, ctx);
+
+    Object* obj = object_new(Symbol, 0);
+    object_insert(&heap->objects, obj);
+
+    ++heap->gc.object_count;
+
+    return &obj->data.cons;
 }
 
 SmCons* sm_heap_alloc_cons(SmHeap* heap, SmContext const* ctx) {
@@ -431,34 +452,60 @@ char* sm_heap_alloc_string(SmHeap* heap, SmContext const* ctx, size_t length) {
     return &obj->data.string;
 }
 
+void** sm_heap_root(SmHeap* heap) {
+    Root* r = sm_aligned_alloc(sm_alignof(Root), sizeof(Root));
+
+    *r = (Root){ heap->roots, NULL, false, { .any = NULL } };
+
+    if (heap->roots)
+        heap->roots->prev = r;
+
+    heap->roots = r;
+
+    return &r->ref.any;
+}
+
 SmValue* sm_heap_root_value(SmHeap* heap) {
     Root* r = sm_aligned_alloc(sm_alignof(Root), sizeof(Root));
 
-    *r = (Root){ heap->roots, NULL, Value, { .value = sm_value_nil() } };
+    *r = (Root){ heap->roots, NULL, true, { .value = sm_value_nil() } };
 
     if (heap->roots)
         heap->roots->prev = r;
 
     heap->roots = r;
 
-    return &r->ptr.value;
+    return &r->ref.value;
 }
 
-SmScope** sm_heap_root_scope(SmHeap* heap) {
-    Root* r = sm_aligned_alloc(sm_alignof(Root), sizeof(Root));
+void sm_heap_root_drop(SmHeap* heap, SmContext const* ctx, void** root) {
+    Root* r = root_from_pointer(false, root);
 
-    *r = (Root){ heap->roots, NULL, Scope, { .scope = NULL } };
+    if (r->prev)
+        r->prev->next = r->next;
+    else
+        heap->roots = r->next;
 
-    if (heap->roots)
-        heap->roots->prev = r;
+    if (r->next)
+        r->next->prev = r->prev;
 
-    heap->roots = r;
+    if (r->ref.any) {
+        Object* obj = object_from_pointer(heap->objects, r->ref.any, true);
+        if (obj) {
+            ++heap->gc.unref_count;
+            if (obj->type == Scope)
+                heap->gc.unref_count += (obj->data.scope.parent != NULL) + sm_scope_size(&obj->data.scope);
+        }
+    }
 
-    return &r->ptr.scope;
+    free(r);
+
+    if (should_collect(&heap->gc))
+        sm_heap_gc(heap, ctx);
 }
 
 void sm_heap_root_value_drop(SmHeap* heap, SmContext const* ctx, SmValue* root) {
-    Root* r = root_from_pointer(Value, root);
+    Root* r = root_from_pointer(true, root);
 
     if (r->prev)
         r->prev->next = r->next;
@@ -468,8 +515,13 @@ void sm_heap_root_value_drop(SmHeap* heap, SmContext const* ctx, SmValue* root) 
     if (r->next)
         r->next->prev = r->prev;
 
-    if (sm_value_is_cons(r->ptr.value))
+    if (sm_value_is_symbol(r->ref.value) ||
+        sm_value_is_string(r->ref.value) ||
+        sm_value_is_cons(r->ref.value) ||
+        sm_value_is_function(r->ref.value))
+    {
         ++heap->gc.unref_count;
+    }
 
     free(r);
 
@@ -477,27 +529,7 @@ void sm_heap_root_value_drop(SmHeap* heap, SmContext const* ctx, SmValue* root) 
         sm_heap_gc(heap, ctx);
 }
 
-void sm_heap_root_scope_drop(SmHeap* heap, SmContext const* ctx, SmScope** root) {
-    Root* r = root_from_pointer(Scope, root);
-
-    if (r->prev)
-        r->prev->next = r->next;
-    else
-        heap->roots = r->next;
-
-    if (r->next)
-        r->next->prev = r->prev;
-
-    if (r->ptr.scope)
-        heap->gc.unref_count += 1 + sm_scope_size(r->ptr.scope);
-
-    free(r);
-
-    if (should_collect(&heap->gc))
-        sm_heap_gc(heap, ctx);
-}
-
-void sm_heap_unref(SmHeap* heap, SmContext const* ctx, uint8_t count) {
+void sm_heap_unref(SmHeap* heap, SmContext const* ctx, size_t count) {
     heap->gc.unref_count += count;
 
     if (should_collect(&heap->gc))
@@ -509,24 +541,22 @@ void sm_heap_gc(SmHeap* heap, SmContext const* ctx) {
 
     // Mark roots
     for (Root* r = heap->roots; r; r = r->next) {
-        if (r->type == Value)
-            gc_mark_value(heap->objects, r->ptr.value);
-        else if (r->ptr.scope)
-            gc_mark(heap->objects, object_from_pointer(heap->objects, r->ptr.scope));
+        if (r->value)
+            gc_mark_value(heap->objects, r->ref.value);
+        else
+            gc_mark(heap->objects, object_from_pointer(heap->objects, r->ref.any, false));
     }
 
     if (ctx) {
         // Ensure current and global scope are marked
-        if (ctx->scope)
-            gc_mark(heap->objects, object_from_pointer(heap->objects, ctx->scope));
+        gc_mark(heap->objects, object_from_pointer(heap->objects, ctx->scope, false));
 
         for (SmVariable* var = sm_scope_first(&ctx->globals); var; var = sm_scope_next(&ctx->globals, var))
             gc_mark_value(heap->objects, var->value);
 
         // Walk stack and mark live scopes
         for (SmStackFrame* frame = ctx->frame; frame; frame = frame->parent)
-            if (frame->saved_scope)
-                gc_mark(heap->objects, object_from_pointer(heap->objects, frame->saved_scope));
+            gc_mark(heap->objects, object_from_pointer(heap->objects, frame->saved_scope, false));
     }
 
     // Sweep phase

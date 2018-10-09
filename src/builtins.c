@@ -240,7 +240,7 @@ SmError SM_BUILTIN_SYMBOL(let)(SmContext* ctx, SmValue args, SmValue* ret) {
     else if (!sm_value_is_list(args.data.cons->car) || sm_value_is_quoted(args.data.cons->car))
         return sm_error(ctx, SmErrorInvalidArgument, "first argument to let must be an unquoted binding list");
 
-    SmScope** scope = sm_heap_root_scope(&ctx->heap);
+    SmScope** scope = (SmScope**) sm_heap_root(&ctx->heap);
     *scope = sm_heap_alloc_scope(&ctx->heap, ctx);
     (*scope)->parent = ctx->scope;
 
@@ -301,7 +301,7 @@ SmError SM_BUILTIN_SYMBOL(let)(SmContext* ctx, SmValue args, SmValue* ret) {
     }
 
     ctx->scope = (*scope)->parent;
-    sm_heap_root_scope_drop(&ctx->heap, ctx, scope);
+    sm_heap_root_drop(&ctx->heap, ctx, (void**) scope);
 
     return err;
 }
@@ -316,7 +316,7 @@ SmError SM_BUILTIN_SYMBOL(let_serial)(SmContext* ctx, SmValue args, SmValue* ret
     else if (!sm_value_is_list(args.data.cons->car) || sm_value_is_quoted(args.data.cons->car))
         return sm_error(ctx, SmErrorInvalidArgument, "first argument to let* must be an unquoted binding list");
 
-    SmScope** scope = sm_heap_root_scope(&ctx->heap);
+    SmScope** scope = (SmScope**) sm_heap_root(&ctx->heap);
     *scope = sm_heap_alloc_scope(&ctx->heap, ctx);
     (*scope)->parent = ctx->scope;
     ctx->scope = *scope;
@@ -378,7 +378,7 @@ SmError SM_BUILTIN_SYMBOL(let_serial)(SmContext* ctx, SmValue args, SmValue* ret
     }
 
     ctx->scope = (*scope)->parent;
-    sm_heap_root_scope_drop(&ctx->heap, ctx, scope);
+    sm_heap_root_drop(&ctx->heap, ctx, (void**) scope);
 
     return err;
 }

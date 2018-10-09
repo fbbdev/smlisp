@@ -8,14 +8,14 @@ extern inline SmFunction sm_macro(SmString name, SmScope* capture, SmCons* lambd
 extern inline void sm_function_drop(SmFunction* function);
 
 SmError sm_function_invoke(SmFunction const* function, SmContext* ctx, SmValue args, SmValue* ret) {
-    SmScope** arg_scope = sm_heap_root_scope(&ctx->heap);
+    SmScope** arg_scope = (SmScope**) sm_heap_root(&ctx->heap);
     *arg_scope = sm_heap_alloc_scope(&ctx->heap, ctx);
     (*arg_scope)->parent = function->capture;
 
     // Unpack arguments into scope
     SmError err = sm_arg_pattern_unpack(&function->args, ctx, *arg_scope, args);
     if (!sm_is_ok(err)) {
-        sm_heap_root_scope_drop(&ctx->heap, ctx, arg_scope);
+        sm_heap_root_drop(&ctx->heap, ctx, (void**) arg_scope);
         return err;
     }
 
@@ -35,7 +35,7 @@ SmError sm_function_invoke(SmFunction const* function, SmContext* ctx, SmValue a
     }
 
     sm_context_exit_frame(ctx);
-    sm_heap_root_scope_drop(&ctx->heap, ctx, arg_scope);
+    sm_heap_root_drop(&ctx->heap, ctx, (void**) arg_scope);
 
     // Evaluate macro result in parent scope
     if (function->macro) {
