@@ -73,6 +73,22 @@ SmError SM_BUILTIN_SYMBOL(print)(SmContext* ctx, SmValue args, SmValue* ret) {
 }
 
 
+SmError SM_BUILTIN_SYMBOL(gensym)(SmContext* ctx, SmValue args, SmValue* ret) {
+    if (!sm_value_is_nil(args) || sm_value_is_quoted(args))
+        return sm_error(ctx, SmErrorExcessArguments, "gensym requires exactly 0 arguments");
+
+    *ret = sm_value_symbol(sm_heap_alloc_symbol(&ctx->heap, ctx));
+
+    size_t length = snprintf(NULL, 0, "<gensym:%p>", (void*) ret->data.symbol);
+    char* buf = sm_heap_alloc_string(&ctx->heap, ctx, length + 1);
+    snprintf(buf, length + 1, "<gensym:%p>", (void*) ret->data.symbol);
+
+    *((SmString*) ret->data.symbol) = (SmString){ buf, length };
+
+    return sm_ok;
+}
+
+
 SmError SM_BUILTIN_SYMBOL(set)(SmContext* ctx, SmValue args, SmValue* ret) {
     // Two required arguments, evaluated
     static const SmArgPatternArg pargs[] = { { NULL, true }, { NULL, true } };

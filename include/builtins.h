@@ -12,6 +12,8 @@ void sm_register_builtins(SmContext* ctx);
     builtin(eval) \
     builtin(print) \
 \
+    builtin(gensym) \
+\
     builtin(set) \
     builtin(setq) \
     builtin(del) \
