@@ -33,6 +33,12 @@ inline size_t sm_heap_size(SmHeap const* heap) {
     return heap->gc.object_count;
 }
 
+inline size_t sm_heap_threshold(SmHeap const* heap) {
+    return heap->gc.object_threshold;
+}
+
+bool sm_heap_contains(SmHeap const* heap, void const* ptr);
+
 SmSymbol sm_heap_alloc_symbol(SmHeap* heap, struct SmContext const* ctx);
 SmCons* sm_heap_alloc_cons(SmHeap* heap, struct SmContext const* ctx);
 struct SmScope* sm_heap_alloc_scope(SmHeap* heap, struct SmContext const* ctx);

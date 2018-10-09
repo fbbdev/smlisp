@@ -9,6 +9,7 @@
 // Inlines
 extern inline SmHeap sm_heap(SmGCConfig gc);
 extern inline size_t sm_heap_size(SmHeap const* heap);
+extern inline size_t sm_heap_threshold(SmHeap const* heap);
 
 // Private helpers
 static inline bool should_collect(struct SmGCStatus const* gc) {
@@ -394,6 +395,10 @@ void sm_heap_drop(SmHeap* heap) {
     // Reset gc status
     heap->gc.object_count = heap->gc.unref_count = 0;
     heap->gc.object_threshold = heap->gc.config.object_threshold;
+}
+
+bool sm_heap_contains(SmHeap const* heap, void const* ptr) {
+    return object_from_pointer(heap->objects, ptr, true) != NULL;
 }
 
 SmSymbol sm_heap_alloc_symbol(SmHeap* heap, SmContext const* ctx) {
