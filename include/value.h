@@ -32,14 +32,8 @@ typedef struct SmValue {
     union {
         SmNumber number;
         SmSymbol symbol;
-
-        struct {
-            char* buffer;
-            SmString view;
-        } string;
-
+        SmString string;
         struct SmCons* cons;
-
         struct SmFunction* function;
     } data;
 } SmValue;
@@ -63,10 +57,9 @@ inline SmValue sm_value_symbol(SmSymbol symbol) {
     return (SmValue){ SmTypeSymbol, 0, { .symbol = symbol } };
 }
 
-inline SmValue sm_value_string(SmString view, char* buffer) {
-    sm_assert(view.length == 0 || view.data != NULL);
-    sm_assert(buffer == NULL || view.data >= buffer);
-    return (SmValue){ SmTypeString, 0, { .string = { buffer, view } } };
+inline SmValue sm_value_string(SmString string) {
+    sm_assert(string.length == 0 || string.data != NULL);
+    return (SmValue){ SmTypeString, 0, { .string = string } };
 }
 
 inline SmValue sm_value_cons(SmCons* cons) {

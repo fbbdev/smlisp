@@ -12,7 +12,7 @@
 extern inline SmValue sm_value_nil();
 extern inline SmValue sm_value_number(SmNumber number);
 extern inline SmValue sm_value_symbol(SmSymbol symbol);
-extern inline SmValue sm_value_string(SmString view, char* buffer);
+extern inline SmValue sm_value_string(SmString view);
 extern inline SmValue sm_value_cons(SmCons* cons);
 extern inline SmValue sm_value_function(SmFunction* function);
 extern inline bool sm_value_is_nil(SmValue value);
@@ -112,7 +112,7 @@ void sm_print_value(FILE* f, SmValue value) {
 
         case SmTypeString:
             fprintf(f, "\"");
-            for (char const *p = value.data.string.view.data, *end = p + value.data.string.view.length;
+            for (char const *p = value.data.string.data, *end = p + value.data.string.length;
                  p != end; ++p)
             {
                 char const* esc = escape_char(*p);

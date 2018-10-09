@@ -472,7 +472,7 @@ SmError SM_BUILTIN_SYMBOL(ignore_errors)(SmContext* ctx, SmValue args, SmValue* 
             sm_build_list(ctx, ret,
                 SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":error"))),
                 SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(err_code))),
-                SmBuildCar, sm_value_string((SmString){ err_msg, err.message.length }, err_msg),
+                SmBuildCar, sm_value_string((SmString){ err_msg, err.message.length }),
                 SmBuildEnd);
             break;
         }

@@ -313,7 +313,7 @@ static void gc_mark_value(Object* root, SmValue value) {
             gc_mark(root, object_from_pointer(root, value.data.symbol, false));
             break;
         case SmTypeString:
-            gc_mark(root, object_from_pointer(root, value.data.string.view.data, false));
+            gc_mark(root, object_from_pointer(root, value.data.string.data, false));
             break;
         case SmTypeCons:
             gc_mark(root, object_from_pointer(root, value.data.cons, false));

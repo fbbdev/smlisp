@@ -458,8 +458,8 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
         }
 
         case String:
-            *form = sm_value_string((SmString){ NULL, 0 }, NULL);
-            err = parse_string(parser, ctx, tok, &form->data.string.view);
+            *form = sm_value_string((SmString){ NULL, 0 });
+            err = parse_string(parser, ctx, tok, &form->data.string);
             break;
 
         case LParen: {
