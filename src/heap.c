@@ -187,6 +187,10 @@ static void object_erase(Object** root, Object* obj) {
 
         if (!pred->parent)
             *root = pred;
+        else if (obj == pred->parent->left)
+            pred->parent->left = pred;
+        else
+            pred->parent->right = pred;
 
         #undef SWAP
     }

@@ -175,6 +175,9 @@ int main(int argc, char* argv[]) {
         sm_string_from_cstring("hello"),
         sm_string_from_cstring("how"),
         sm_string_from_cstring("are"),
+        sm_string_from_cstring("wakanda"),
+        sm_string_from_cstring("ololo"),
+        sm_string_from_cstring("elele"),
         sm_string_from_cstring("you"),
         sm_string_from_cstring("fine"),
         sm_string_from_cstring("thanks")
