@@ -99,7 +99,7 @@ SmError SM_BUILTIN_SYMBOL(set)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (var) {
         var->value = ret->data.cons->cdr.data.cons->car;
     } else {
-        sm_scope_set(ctx->main.saved_scope,
+        sm_scope_set(&ctx->globals,
             ret->data.cons->car.data.symbol,
             ret->data.cons->cdr.data.cons->car);
     }
@@ -136,7 +136,7 @@ SmError SM_BUILTIN_SYMBOL(setq)(SmContext* ctx, SmValue args, SmValue* ret) {
         if (var)
             var->value = *ret;
         else
-            sm_scope_set(ctx->main.saved_scope, cons->car.data.symbol, *ret);
+            sm_scope_set(&ctx->globals, cons->car.data.symbol, *ret);
 
         cons = sm_list_next(cons);
         if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))

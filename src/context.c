@@ -8,16 +8,17 @@ extern inline void sm_context_exit_frame(SmContext* ctx);
 SmContext* sm_context(SmGCConfig gc) {
     SmContext* ctx = sm_aligned_alloc(sm_alignof(SmContext), sizeof(SmContext));
 
-    SmHeap heap = sm_heap(gc);
-    SmScope* globals = sm_heap_alloc_scope(&heap, NULL);
-
     *ctx = (SmContext){
         sm_symbol_set(),
         sm_rbtree(sizeof(External), sm_alignof(External), sm_symbol_key, sm_key_compare_ptr),
-        (SmStackFrame){ NULL, sm_string_from_cstring("<main>"), globals },
+
+        (SmStackFrame){ NULL, sm_string_from_cstring("<main>"), &ctx->globals },
+        sm_scope(NULL),
+
         &ctx->main,
-        globals,
-        heap
+        &ctx->globals,
+
+        sm_heap(gc)
     };
 
     return ctx;
@@ -26,6 +27,7 @@ SmContext* sm_context(SmGCConfig gc) {
 void sm_context_drop(SmContext* ctx) {
     sm_symbol_set_drop(&ctx->symbols);
     sm_rbtree_drop(&ctx->externals);
+    sm_scope_drop(&ctx->globals);
     sm_heap_drop(&ctx->heap);
     free(ctx);
 }

@@ -520,8 +520,8 @@ void sm_heap_gc(SmHeap* heap, SmContext const* ctx) {
         if (ctx->scope)
             gc_mark(heap->objects, object_from_pointer(heap->objects, ctx->scope));
 
-        if (ctx->main.saved_scope)
-            gc_mark(heap->objects, object_from_pointer(heap->objects, ctx->main.saved_scope));
+        for (SmVariable* var = sm_scope_first(&ctx->globals); var; var = sm_scope_next(&ctx->globals, var))
+            gc_mark_value(heap->objects, var->value);
 
         // Walk stack and mark live scopes
         for (SmStackFrame* frame = ctx->frame; frame; frame = frame->parent)

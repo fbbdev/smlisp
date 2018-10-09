@@ -20,6 +20,8 @@ typedef struct SmContext {
     SmRBTree externals;
 
     SmStackFrame main;
+    SmScope globals;
+
     SmStackFrame* frame;
     SmScope* scope;
 
