@@ -34,9 +34,9 @@ inline size_t sm_heap_size(SmHeap const* heap) {
 }
 
 SmCons* sm_heap_alloc_cons(SmHeap* heap, struct SmContext const* ctx);
-struct SmScope* sm_heap_alloc_scope(SmHeap* heap, struct SmContext const* ctx, struct SmScope* parent);
-char* sm_heap_alloc_string(SmHeap* heap, struct SmContext const* ctx, size_t length);
+struct SmScope* sm_heap_alloc_scope(SmHeap* heap, struct SmContext const* ctx);
 struct SmFunction* sm_heap_alloc_function(SmHeap* heap, struct SmContext const* ctx);
+char* sm_heap_alloc_string(SmHeap* heap, struct SmContext const* ctx, size_t length);
 
 SmValue* sm_heap_root_value(SmHeap* heap);
 struct SmScope** sm_heap_root_scope(SmHeap* heap);

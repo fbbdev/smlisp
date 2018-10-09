@@ -241,7 +241,8 @@ SmError SM_BUILTIN_SYMBOL(let)(SmContext* ctx, SmValue args, SmValue* ret) {
         return sm_error(ctx, SmErrorInvalidArgument, "first argument to let must be an unquoted binding list");
 
     SmScope** scope = sm_heap_root_scope(&ctx->heap);
-    *scope = sm_heap_alloc_scope(&ctx->heap, ctx, ctx->scope);
+    *scope = sm_heap_alloc_scope(&ctx->heap, ctx);
+    (*scope)->parent = ctx->scope;
 
     SmError err = sm_ok;
 
@@ -316,7 +317,9 @@ SmError SM_BUILTIN_SYMBOL(let_serial)(SmContext* ctx, SmValue args, SmValue* ret
         return sm_error(ctx, SmErrorInvalidArgument, "first argument to let* must be an unquoted binding list");
 
     SmScope** scope = sm_heap_root_scope(&ctx->heap);
-    *scope = ctx->scope = sm_heap_alloc_scope(&ctx->heap, ctx, ctx->scope);
+    *scope = sm_heap_alloc_scope(&ctx->heap, ctx);
+    (*scope)->parent = ctx->scope;
+    ctx->scope = *scope;
 
     SmError err = sm_ok;
 

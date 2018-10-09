@@ -9,7 +9,7 @@ SmContext* sm_context(SmGCConfig gc) {
     SmContext* ctx = sm_aligned_alloc(sm_alignof(SmContext), sizeof(SmContext));
 
     SmHeap heap = sm_heap(gc);
-    SmScope* globals = sm_heap_alloc_scope(&heap, NULL, NULL);
+    SmScope* globals = sm_heap_alloc_scope(&heap, NULL);
 
     *ctx = (SmContext){
         sm_symbol_set(),

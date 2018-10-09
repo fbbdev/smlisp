@@ -124,6 +124,7 @@ SmCons* sm_heap_alloc_cons(SmHeap* heap, SmContext const* ctx) {
 }
 
 SmScope* sm_heap_alloc_scope(SmHeap* heap, SmContext const* ctx, SmScope* parent) {
+SmScope* sm_heap_alloc_scope(SmHeap* heap, SmContext const* ctx) {
     if (should_collect(&heap->gc))
         sm_heap_gc(heap, ctx);
 
@@ -132,7 +133,7 @@ SmScope* sm_heap_alloc_scope(SmHeap* heap, SmContext const* ctx, SmScope* parent
 
     ++heap->gc.object_count;
 
-    obj->data.scope = sm_scope(parent);
+    obj->data.scope = sm_scope(NULL);
     return &obj->data.scope;
 }
 

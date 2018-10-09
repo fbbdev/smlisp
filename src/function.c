@@ -9,7 +9,8 @@ extern inline void sm_function_drop(SmFunction* function);
 
 SmError sm_function_invoke(SmFunction const* function, SmContext* ctx, SmValue args, SmValue* ret) {
     SmScope** arg_scope = sm_heap_root_scope(&ctx->heap);
-    *arg_scope = sm_heap_alloc_scope(&ctx->heap, ctx, function->capture);
+    *arg_scope = sm_heap_alloc_scope(&ctx->heap, ctx);
+    (*arg_scope)->parent = function->capture;
 
     // Unpack arguments into scope
     SmError err = sm_arg_pattern_unpack(&function->args, ctx, *arg_scope, args);
