@@ -355,8 +355,7 @@ void sm_rbtree_erase(SmRBTree* tree, void* element) {
             node->parent->right = node;
 
         predecessor->left->parent = predecessor;
-        if (predecessor->right != LEAF)
-            predecessor->right->parent = predecessor;
+        predecessor->right->parent = predecessor;
 
         // Update root if necessary
         if (!predecessor->parent)
