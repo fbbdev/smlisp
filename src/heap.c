@@ -159,7 +159,7 @@ SmFunction* sm_heap_alloc_function(SmHeap* heap, SmContext const* ctx) {
     ++heap->gc.object_count;
 
     obj->data.function = (SmFunction){
-        { { NULL, 0 }, NULL, 0, { NULL, false, false} }, NULL, NULL
+        false, { { NULL, 0 }, NULL, 0, { NULL, false, false} }, NULL, NULL
     };
     return &obj->data.function;
 }

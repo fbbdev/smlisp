@@ -6,6 +6,7 @@
 #include "value.h"
 
 typedef struct SmFunction {
+    bool macro;
     SmArgPattern args;
     SmScope* capture;
     SmCons* progn;
@@ -14,6 +15,17 @@ typedef struct SmFunction {
 // Expects a valid lambda expression (see sm_validate_lambda)
 inline SmFunction sm_function(SmString name, SmScope* capture, SmCons* lambda) {
     return (SmFunction){
+        false,
+        sm_arg_pattern_from_spec(name, lambda->car),
+        capture,
+        sm_list_next(lambda)
+    };
+}
+
+// Expects a valid macro expression (see sm_validate_lambda)
+inline SmFunction sm_macro(SmString name, SmScope* capture, SmCons* lambda) {
+    return (SmFunction){
+        true,
         sm_arg_pattern_from_spec(name, lambda->car),
         capture,
         sm_list_next(lambda)

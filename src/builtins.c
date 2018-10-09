@@ -607,6 +607,7 @@ SmError SM_BUILTIN_SYMBOL(caar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("caar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -635,6 +636,7 @@ SmError SM_BUILTIN_SYMBOL(cadr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cadr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -663,6 +665,7 @@ SmError SM_BUILTIN_SYMBOL(cdar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cdar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -690,6 +693,7 @@ SmError SM_BUILTIN_SYMBOL(cddr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cddr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -721,6 +725,7 @@ SmError SM_BUILTIN_SYMBOL(caaar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("caaar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -752,6 +757,7 @@ SmError SM_BUILTIN_SYMBOL(caadr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("caadr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -783,6 +789,7 @@ SmError SM_BUILTIN_SYMBOL(cadar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cadar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -814,6 +821,7 @@ SmError SM_BUILTIN_SYMBOL(cdaar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cdaar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -845,6 +853,7 @@ SmError SM_BUILTIN_SYMBOL(caddr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("caddr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -876,6 +885,7 @@ SmError SM_BUILTIN_SYMBOL(cddar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cddar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -907,6 +917,7 @@ SmError SM_BUILTIN_SYMBOL(cdadr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cdadr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -937,6 +948,7 @@ SmError SM_BUILTIN_SYMBOL(cdddr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cdddr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -971,6 +983,7 @@ SmError SM_BUILTIN_SYMBOL(caaaar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("caaaar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1005,6 +1018,7 @@ SmError SM_BUILTIN_SYMBOL(caaadr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("caaadr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1039,6 +1053,7 @@ SmError SM_BUILTIN_SYMBOL(caadar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("caadar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1073,6 +1088,7 @@ SmError SM_BUILTIN_SYMBOL(cadaar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cadaar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1107,6 +1123,7 @@ SmError SM_BUILTIN_SYMBOL(cdaaar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cdaaar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1141,6 +1158,7 @@ SmError SM_BUILTIN_SYMBOL(caaddr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("caaddr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1175,6 +1193,7 @@ SmError SM_BUILTIN_SYMBOL(caddar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("caddar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1209,6 +1228,7 @@ SmError SM_BUILTIN_SYMBOL(cddaar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cddaar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1243,6 +1263,7 @@ SmError SM_BUILTIN_SYMBOL(cadadr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cadadr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1277,6 +1298,7 @@ SmError SM_BUILTIN_SYMBOL(cdadar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cdadar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1311,6 +1333,7 @@ SmError SM_BUILTIN_SYMBOL(cdaadr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cdaadr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1345,6 +1368,7 @@ SmError SM_BUILTIN_SYMBOL(cadddr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cadddr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1379,6 +1403,7 @@ SmError SM_BUILTIN_SYMBOL(cdaddr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cdaddr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1413,6 +1438,7 @@ SmError SM_BUILTIN_SYMBOL(cddadr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cddadr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1447,6 +1473,7 @@ SmError SM_BUILTIN_SYMBOL(cdddar)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cdddar"), sm_value_cons(&args)),
         NULL,
         ret->data.cons
@@ -1480,6 +1507,7 @@ SmError SM_BUILTIN_SYMBOL(cddddr)(SmContext* ctx, SmValue* ret) {
 
     SmCons args = { sm_value_symbol(lst), sm_value_nil() };
     *fn = (SmFunction){
+        false,
         sm_arg_pattern_from_spec(sm_string_from_cstring("cddddr"), sm_value_cons(&args)),
         NULL,
         ret->data.cons

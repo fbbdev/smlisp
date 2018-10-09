@@ -4,6 +4,7 @@
 
 // Inlines
 extern inline SmFunction sm_function(SmString name, SmScope* capture, SmCons* lambda);
+extern inline SmFunction sm_macro(SmString name, SmScope* capture, SmCons* lambda);
 extern inline void sm_function_drop(SmFunction* function);
 
 SmError sm_function_invoke(SmFunction const* function, SmContext* ctx, SmValue args, SmValue* ret) {
@@ -34,6 +35,22 @@ SmError sm_function_invoke(SmFunction const* function, SmContext* ctx, SmValue a
 
     sm_context_exit_frame(ctx);
     sm_heap_root_scope_drop(&ctx->heap, ctx, arg_scope);
+
+    // Evaluate macro result in parent scope
+    if (function->macro) {
+        // Enter frame again (for better error reporting)
+        sm_context_enter_frame(ctx, &frame, function->args.name);
+
+        SmValue* form = sm_heap_root_value(&ctx->heap);
+        *form = *ret;
+
+        *ret = sm_value_nil();
+        err = sm_eval(ctx, *form, ret);
+
+        sm_heap_root_value_drop(&ctx->heap, ctx, form);
+
+        sm_context_exit_frame(ctx);
+    }
 
     return err;
 }
