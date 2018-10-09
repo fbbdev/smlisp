@@ -517,6 +517,18 @@ SmError SM_BUILTIN_SYMBOL(lambda)(SmContext* ctx, SmValue args, SmValue* ret) {
     return sm_ok;
 }
 
+SmError SM_BUILTIN_SYMBOL(macro)(SmContext* ctx, SmValue args, SmValue* ret) {
+    SmError err = sm_validate_lambda(ctx, args);
+    if (!sm_is_ok(err))
+        return err;
+
+    SmFunction* fn = sm_heap_alloc_function(&ctx->heap, ctx);
+    *fn = sm_macro(sm_string_from_cstring("<macro>"), ctx->scope, args.data.cons);
+    *ret = sm_value_function(fn);
+
+    return sm_ok;
+}
+
 SmError SM_BUILTIN_SYMBOL(quote)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_value_is_list(args) || sm_value_is_quoted(args))
         return sm_error(ctx, SmErrorInvalidArgument, "quote cannot accept a dotted argument list");
@@ -532,6 +544,22 @@ SmError SM_BUILTIN_SYMBOL(quote)(SmContext* ctx, SmValue args, SmValue* ret) {
     return_value(args.data.cons->car);
 }
 
+SmError SM_BUILTIN_SYMBOL(add_quote)(SmContext* ctx, SmValue args, SmValue* ret) {
+    if (!sm_value_is_list(args) || sm_value_is_quoted(args))
+        return sm_error(ctx, SmErrorInvalidArgument, "add-quote cannot accept a dotted argument list");
+    else if (sm_value_is_nil(args))
+        return sm_error(ctx, SmErrorMissingArguments, "add-quote requires exactly 1 argument");
+    else if (!sm_value_is_list(args.data.cons->cdr) || sm_value_is_quoted(args.data.cons->cdr))
+        return sm_error(ctx, SmErrorInvalidArgument, "add-quote cannot accept a dotted argument list");
+    else if (!sm_value_is_nil(args.data.cons->cdr))
+        return sm_error(ctx, SmErrorExcessArguments, "add-quote requires exactly 1 argument");
+
+    SmError err = sm_eval(ctx, args.data.cons->car, ret);
+    if (sm_is_ok(err))
+        *ret = sm_value_quote(*ret, 1);
+
+    return err;
+}
 
 SmError SM_BUILTIN_SYMBOL(car)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_value_is_list(args) || sm_value_is_quoted(args))

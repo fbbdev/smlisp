@@ -28,7 +28,9 @@ void sm_register_builtins(SmContext* ctx);
     builtin(list) \
     builtin_op(list_dot, list*) \
     builtin(lambda) \
+    builtin(macro) \
     builtin(quote) \
+    builtin_op(add_quote, add-quote) \
 \
     builtin(car) \
     builtin(cdr) \
