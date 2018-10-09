@@ -6,25 +6,43 @@
 
 #include <stdint.h>
 
+#if (SIZE_MAX == 0xFFFF)
+    #define SIZE_BITS 12
+#elif (SIZE_MAX == 0xFFFFFFFF)
+    #define SIZE_BITS 28
+#elif (SIZE_MAX == 0xFFFFFFFFFFFFFFFF)
+    #define SIZE_BITS 60
+#else
+    #error Cannot determine size_t bits
+#endif
+
 typedef enum Type {
-    Cons,
+    Cons = 0,
     Scope,
-    String,
     Function,
+    String,
 
     Value = Cons
 } Type;
 
+// Objects implement an AVL augmented tree
 typedef struct SmHeapObject {
-    struct SmHeapObject* next;
-    unsigned int type : 2;
+    struct SmHeapObject* parent;
+    struct SmHeapObject* left;
+    struct SmHeapObject* right;
+
     bool marked : 1;
+    bool all_marked : 1;
+    unsigned int type : 2;
+    size_t height : SIZE_BITS;
+
+    size_t size;
 
     union Data {
         SmCons cons;
         SmScope scope;
-        char string;
         SmFunction function;
+        char string;
     } data;
 
     uint8_t mem[];
