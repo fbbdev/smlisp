@@ -1,5 +1,5 @@
 #include "rbtree.h"
-#include "rbtree_p.h"
+#include "private/rbtree.h"
 #include "util.h"
 
 #include <limits.h>

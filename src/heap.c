@@ -1,6 +1,6 @@
 #include "context.h"
 #include "heap.h"
-#include "heap_p.h"
+#include "private/heap.h"
 
 #include "util.h"
 

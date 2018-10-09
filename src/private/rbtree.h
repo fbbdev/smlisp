@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rbtree.h"
+#include "../../include/rbtree.h"
 
 typedef enum Color {
     Red = 0,

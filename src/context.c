@@ -1,5 +1,5 @@
 #include "context.h"
-#include "context_p.h"
+#include "private/context.h"
 
 // Inlines
 extern inline void sm_context_enter_frame(SmContext* ctx, SmStackFrame* frame, SmString name);

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "heap.h"
-#include "scope.h"
-#include "function.h"
+#include "../../include/heap.h"
+#include "../../include/scope.h"
+#include "../../include/function.h"
 
 #include <stdint.h>
 
