@@ -32,6 +32,26 @@ void sm_register_builtins(SmContext* ctx) {
 }
 
 // Builtins
+SmError SM_BUILTIN_SYMBOL(gc)(SmContext* ctx, SmValue args, SmValue* ret) {
+    if (!sm_value_is_nil(args) || sm_value_is_quoted(args))
+        return sm_error(ctx, SmErrorExcessArguments, "gc requires exactly 0 arguments");
+
+    size_t objects_before = ctx->heap.gc.object_count;
+
+    sm_heap_gc(&ctx->heap, ctx);
+
+    sm_build_list(ctx, ret,
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":dead"))),
+        SmBuildCar, sm_value_number(sm_number_int((int64_t) objects_before - ctx->heap.gc.object_count)),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":alive"))),
+        SmBuildCar, sm_value_number(sm_number_int((int64_t) ctx->heap.gc.object_count)),
+        SmBuildCar, sm_value_symbol(sm_symbol(&ctx->symbols, sm_string_from_cstring(":threshold"))),
+        SmBuildCar, sm_value_number(sm_number_int((int64_t) ctx->heap.gc.object_threshold)),
+        SmBuildEnd);
+
+    return sm_ok;
+}
+
 SmError SM_BUILTIN_SYMBOL(eval)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_value_is_list(args) || sm_value_is_quoted(args))
         return sm_error(ctx, SmErrorInvalidArgument, "eval cannot accept a dotted argument list");
