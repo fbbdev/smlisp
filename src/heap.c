@@ -25,7 +25,10 @@ static Object* object_new(Type type, size_t size) {
     Object* obj = sm_aligned_alloc(sm_alignof(Object), size);
     *obj = (Object){
         NULL, NULL, NULL,
-        false, false, type, 1, size,
+        false, false, type, 1,
+        ((uintptr_t) obj) + size,
+        (uintptr_t) obj,
+        ((uintptr_t) obj) + size,
         { .string = '\0' }
     };
 
@@ -80,6 +83,10 @@ static Object* object_rotate_left(Object* obj) {
     if (obj->right)
         obj->right->parent = obj;
 
+    // Update bounds
+    obj->upper_bound = obj->right ? obj->right->upper_bound : obj->end;
+    r->lower_bound = obj->lower_bound;
+
     // Update height
     size_t lh = obj->left ? obj->left->height : 0;
     size_t rh = obj->right ? obj->right->height : 0;
@@ -105,6 +112,10 @@ static Object* object_rotate_right(Object* obj) {
     if (obj->left)
         obj->left->parent = obj;
 
+    // Update bounds
+    obj->lower_bound = obj->left ? obj->left->lower_bound : ((uintptr_t) obj);
+    l->upper_bound = obj->upper_bound;
+
     // Update height
     size_t lh = obj->left ? obj->left->height : 0;
     size_t rh = obj->right ? obj->right->height : 0;
@@ -121,9 +132,18 @@ static void object_insert(Object** root, Object* obj) {
     obj->parent = NULL;
 
     // Find insertion point (assume node is not in tree already)
+    // While descending, update bounds
     while (*insp) {
         obj->parent = *insp;
-        insp = (obj < *insp) ? &(*insp)->left : &(*insp)->right;
+        if (obj < *insp) {
+            if ((*insp)->lower_bound > obj->lower_bound)
+                (*insp)->lower_bound = obj->lower_bound;
+            insp = &(*insp)->left;
+        } else {
+            if ((*insp)->upper_bound < obj->upper_bound)
+                (*insp)->upper_bound = obj->upper_bound;
+            insp = &(*insp)->right;
+        }
     }
 
     // Insert node
@@ -167,16 +187,19 @@ static void object_insert(Object** root, Object* obj) {
 static void object_erase(Object** root, Object* obj) {
     // If node has two children, swap it with predecessor
     if (obj->left && obj->right) {
-        #define SWAP(tp, a, b) { tp tmp = (a); (a) = (b); (b) = tmp; }
+        #define SWAP(a, b) { Object* tmp = (a); (a) = (b); (b) = tmp; }
 
         Object* pred = obj->left;
         while (pred->right)
             pred = pred->right;
 
-        SWAP(Object*, obj->parent, pred->parent);
-        SWAP(Object*, obj->left, pred->left);
-        SWAP(Object*, obj->right, pred->right);
-        SWAP(size_t, obj->height, pred->height);
+        SWAP(obj->parent, pred->parent);
+        SWAP(obj->left, pred->left);
+        SWAP(obj->right, pred->right);
+
+        pred->height = obj->height;
+        pred->lower_bound = obj->lower_bound;
+        pred->upper_bound = obj->upper_bound;
 
         if (pred->left == pred)
             pred->left = obj;
@@ -209,6 +232,10 @@ static void object_erase(Object** root, Object* obj) {
         const size_t lh = p->left ? p->left->height : 0;
         const size_t rh = p->right ? p->right->height : 0;
         p->height = 1 + ((lh < rh) ? rh : lh);
+
+        // Update bounds
+        p->lower_bound = p->left ? p->left->lower_bound : ((uintptr_t) p);
+        p->upper_bound = p->right ? p->right->upper_bound : p->end;
 
         const intptr_t balance = ((intptr_t)rh) - ((intptr_t)lh);
 
@@ -247,15 +274,12 @@ static Object* object_from_pointer(Object* root, void const* ptr, bool find) {
 
     // Tree lookup for an object containing this pointer
     while (obj) {
-        if (obj->all_marked && !find)
+        if ((obj->all_marked && !find) || key < obj->lower_bound || key >= obj->upper_bound)
             return NULL;
 
-        const uintptr_t start = (uintptr_t) obj;
-        const uintptr_t end = start + obj->size;
-
-        if (key < start)
+        if (key < ((uintptr_t) obj))
             obj = obj->left;
-        else if (key < end)
+        else if (key < obj->end)
             return obj;
         else
             obj = obj->right;
@@ -397,7 +421,7 @@ void sm_heap_drop(SmHeap* heap) {
     heap->gc.object_threshold = heap->gc.config.object_threshold;
 }
 
-bool sm_heap_contains(SmHeap const* heap, void const* ptr) {
+bool sm_heap_is_managed(SmHeap const* heap, void const* ptr) {
     return object_from_pointer(heap->objects, ptr, true) != NULL;
 }
 

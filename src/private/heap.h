@@ -35,7 +35,9 @@ typedef struct SmHeapObject {
     unsigned int type : 2;
     size_t height : SIZE_BITS;
 
-    size_t size;
+    uintptr_t end;
+    uintptr_t lower_bound;
+    uintptr_t upper_bound;
 
     union Data {
         SmString symbol;
