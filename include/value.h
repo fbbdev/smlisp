@@ -146,4 +146,6 @@ inline size_t sm_list_size(SmCons* cons) {
     return size;
 }
 
+void sm_list_copy(struct SmContext* ctx, SmCons* cons, SmValue* ret);
+
 void sm_build_list(struct SmContext* ctx, SmValue* ret, ...);

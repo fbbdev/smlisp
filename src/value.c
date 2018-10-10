@@ -188,6 +188,30 @@ void sm_print_value(FILE* f, SmValue value) {
     }
 }
 
+// List functions
+void sm_list_copy(SmContext* ctx, SmCons* cons, SmValue* ret) {
+    if (!cons) {
+        *ret = sm_value_nil();
+        return;
+    }
+
+    SmCons* copy = sm_heap_alloc_cons(&ctx->heap, ctx);
+    *ret = sm_value_cons(copy);
+
+    copy->car = cons->car;
+    if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
+        copy->cdr = cons->cdr;
+
+    for (cons = sm_list_next(cons); cons; cons = sm_list_next(cons)) {
+        copy->cdr = sm_value_cons(sm_heap_alloc_cons(&ctx->heap, ctx));
+        copy = copy->cdr.data.cons;
+
+        copy->car = cons->car;
+        if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr))
+            copy->cdr = cons->cdr;
+    }
+}
+
 // List building
 void build_list_v(SmContext* ctx, SmValue* ret, va_list* args) {
     SmBuildOp op = va_arg(*args, SmBuildOp);

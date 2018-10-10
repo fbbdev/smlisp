@@ -35,6 +35,9 @@ void sm_register_builtins(SmContext* ctx);
     builtin(quote) \
     builtin_op(add_quote, add-quote) \
 \
+    builtin(copy) \
+    builtin(append) \
+\
     builtin(car) \
     builtin(cdr) \
 \

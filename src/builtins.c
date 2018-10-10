@@ -594,11 +594,109 @@ SmError SM_BUILTIN_SYMBOL(add_quote)(SmContext* ctx, SmValue args, SmValue* ret)
         return sm_error(ctx, SmErrorExcessArguments, "add-quote requires exactly 1 argument");
 
     SmError err = sm_eval(ctx, args.data.cons->car, ret);
-    if (sm_is_ok(err))
-        *ret = sm_value_quote(*ret, 1);
+    if (sm_is_ok(err)) {
+        if (UINT8_MAX - ret->quotes < 1) {
+            *ret = sm_value_nil();
+            err = sm_error(ctx, SmErrorGeneric, "add-quote: max quote count exceeded");
+        } else {
+            *ret = sm_value_quote(*ret, 1);
+        }
+    }
 
     return err;
 }
+
+
+SmError SM_BUILTIN_SYMBOL(copy)(SmContext* ctx, SmValue args, SmValue* ret) {
+    if (!sm_value_is_list(args) || sm_value_is_quoted(args))
+        return sm_error(ctx, SmErrorInvalidArgument, "copy cannot accept a dotted argument list");
+    else if (sm_value_is_nil(args))
+        return sm_error(ctx, SmErrorMissingArguments, "copy requires exactly 1 argument");
+    else if (!sm_value_is_list(args.data.cons->cdr) || sm_value_is_quoted(args.data.cons->cdr))
+        return sm_error(ctx, SmErrorInvalidArgument, "copy cannot accept a dotted argument list");
+    else if (!sm_value_is_nil(args.data.cons->cdr))
+        return sm_error(ctx, SmErrorExcessArguments, "copy requires exactly 1 argument");
+
+    SmError err = sm_eval(ctx, args.data.cons->car, ret);
+    if (sm_is_ok(err)) {
+        if (sm_value_is_string(*ret)) {
+            char* buf = sm_heap_alloc_string(&ctx->heap, ctx, ret->data.string.length);
+            strncpy(buf, ret->data.string.data, ret->data.string.length);
+            ret->data.string.data = buf;
+        } else if (sm_value_is_cons(*ret)) {
+            SmValue* copy = sm_heap_root_value(&ctx->heap);
+            sm_list_copy(ctx, ret->data.cons, copy);
+            *ret = *copy;
+            sm_heap_root_value_drop(&ctx->heap, ctx, copy);
+        }
+    }
+
+    return err;
+}
+
+SmError SM_BUILTIN_SYMBOL(append)(SmContext* ctx, SmValue args, SmValue* ret) {
+    if (!sm_value_is_list(args) || sm_value_is_quoted(args))
+        return sm_error(ctx, SmErrorInvalidArgument, "append cannot accept a dotted argument list");
+    else {
+        SmValue dot = sm_list_dot(args.data.cons);
+        if (!sm_value_is_nil(dot) || sm_value_is_quoted(dot))
+            return sm_error(ctx, SmErrorInvalidArgument, "append cannot accept a dotted argument list");
+    }
+
+    if (sm_value_is_nil(args)) {
+        *ret = sm_value_nil();
+        return sm_ok;
+    }
+
+    SmError err = sm_ok;
+    *ret = sm_value_nil();
+
+    SmCons* arg = args.data.cons;
+
+    // Find first non-nil value
+    while (arg && sm_value_is_nil(*ret) && !sm_value_is_quoted(*ret)) {
+        err = sm_eval(ctx, arg->car, ret);
+        if (!sm_is_ok(err))
+            return err;
+        arg = sm_list_next(arg);
+    }
+
+    SmValue* tmp = sm_heap_root_value(&ctx->heap);
+    SmValue* slot = ret;
+
+    while (arg) {
+        if (!sm_value_is_cons(*ret) || sm_value_is_quoted(*ret)) {
+            err = sm_error(ctx, SmErrorInvalidArgument, "arguments to append must all evaluate to a list except the last one");
+            break;
+        }
+
+        sm_list_copy(ctx, slot->data.cons, tmp);
+        *slot = *tmp;
+
+        for (SmCons* cons = slot->data.cons; cons; sm_list_next(cons))
+            slot = &cons->cdr;
+
+        *slot = sm_value_nil();
+
+        // Find first non-nil value
+        while (arg && sm_value_is_nil(*slot) && !sm_value_is_quoted(*slot)) {
+            err = sm_eval(ctx, arg->car, slot);
+            if (!sm_is_ok(err))
+                break;
+            arg = sm_list_next(arg);
+        }
+
+        if (!sm_is_ok(err))
+            break;
+    }
+
+    if (!sm_is_ok(err))
+        *ret = sm_value_nil();
+
+    sm_heap_root_value_drop(&ctx->heap, ctx, tmp);
+    return err;
+}
+
 
 SmError SM_BUILTIN_SYMBOL(car)(SmContext* ctx, SmValue args, SmValue* ret) {
     if (!sm_value_is_list(args) || sm_value_is_quoted(args))

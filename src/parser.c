@@ -20,8 +20,11 @@ typedef enum TokenType {
     String,
     LParen,
     RParen,
-    Quote,
     Dot,
+    Quote,
+    Backquote,
+    Comma,
+    Splice,
     Truncated,
     Invalid
 } TokenType;
@@ -95,7 +98,7 @@ static size_t consume_whitespace(SmParser* parser) {
 }
 
 static inline bool token_boundary(char c) {
-    return isspace(c) || c == '\'' || c == '"' || c == '(' || c == ')';
+    return isspace(c) || c == '\'' || c == '"' || c == '(' || c == ')' || c == '`' || c == ',';
 }
 
 static bool valid_integer(SmString str) {
@@ -181,6 +184,21 @@ static Token lexer_next(SmParser* parser) {
         case '\'':
             tok.type = Quote;
             tok.source.length = consume(parser, 1);
+            break;
+
+        case '`':
+            tok.type = Backquote;
+            tok.source.length = consume(parser, 1);
+            break;
+
+        case ',':
+            tok.type = Comma;
+            tok.source.length = consume(parser, 1);
+
+            if (parser->source.length > 0 && *parser->source.data == '@') {
+                tok.type = Splice;
+                tok.source.length += consume(parser, 1);
+            }
             break;
 
         case '"':
@@ -411,6 +429,128 @@ static SmError parse_string(SmParser const* parser, SmContext* ctx, Token tok, S
     return sm_ok;
 }
 
+static const SmString symbol_comma_str = { "<template:comma>", 16 };
+static const SmSymbol symbol_comma = &symbol_comma_str;
+static const SmString symbol_splice_str = { "<template:splice>", 17 };
+static const SmSymbol symbol_splice = &symbol_splice_str;
+
+static SmError build_template(SmParser* parser, SmContext* ctx, Token tok, SmValue* form) {
+    const SmSymbol add_quote = sm_symbol(&ctx->symbols, sm_string_from_cstring("add-quote"));
+    const SmSymbol append = sm_symbol(&ctx->symbols, sm_string_from_cstring("append"));
+    const SmSymbol list = sm_symbol(&ctx->symbols, sm_string_from_cstring("list"));
+    const SmSymbol list_dot = sm_symbol(&ctx->symbols, sm_string_from_cstring("list*"));
+
+    if (!sm_value_is_cons(*form)) {
+        if (form->quotes == UINT8_MAX)
+            return parser_error(parser, tok, ctx, SmErrorGeneric, "max quote count exceeded in template");
+
+        ++form->quotes;
+        return sm_ok;
+    }
+
+    while (sm_value_is_quoted(*form)) {
+        SmCons* cons = sm_heap_alloc_cons(&ctx->heap, ctx);
+        cons->car = sm_value_symbol(add_quote);
+        cons->cdr = sm_value_unquote(*form, 1); // Store temporarily to avoid GC
+        *form = sm_value_cons(cons);
+
+        SmCons* arg = sm_heap_alloc_cons(&ctx->heap, ctx);
+        arg->car = cons->cdr;
+        cons->cdr = sm_value_cons(arg);
+
+        form = &arg->car;
+    }
+
+    if (sm_value_is_symbol(form->data.cons->car)) {
+        if (form->data.cons->car.data.symbol == symbol_comma) {
+            *form = form->data.cons->cdr;
+            return sm_ok;
+        } else if (form->data.cons->car.data.symbol == symbol_splice) {
+            return parser_error(parser, tok, ctx, SmErrorSyntaxError, "splice operator found in template outside list");
+        }
+    }
+
+    SmCons* prefix = sm_heap_alloc_cons(&ctx->heap, ctx);
+    prefix->car = sm_value_symbol(list);
+    prefix->cdr = *form;
+    *form = sm_value_cons(prefix);
+
+    for (SmCons *cons = prefix->cdr.data.cons, *prev = NULL; cons; prev = cons, cons = sm_list_next(cons)) {
+        if (sm_value_is_symbol(cons->car)) {
+            if (cons->car.data.symbol == symbol_comma) {
+                prefix->car = sm_value_symbol(list_dot);
+                cons->car = cons->cdr;
+                cons->cdr = sm_value_nil();
+                continue;
+            } else if (cons->car.data.symbol == symbol_splice) {
+                return parser_error(parser, tok, ctx, SmErrorSyntaxError, "splice operator found in list template after dot");
+            }
+        } else if (sm_value_is_cons(cons->car) && !sm_value_is_quoted(cons->car) && sm_value_is_symbol(cons->car.data.cons->car)) {
+            if (cons->car.data.cons->car.data.symbol == symbol_comma) {
+                cons->car = cons->car.data.cons->cdr;
+                continue;
+            } else if (cons->car.data.cons->car.data.symbol == symbol_splice) {
+                if (sm_value_is_nil(cons->cdr) && !sm_value_is_quoted(cons->cdr)) {
+                    prefix->car = sm_value_symbol(list_dot);
+                    cons->car = cons->car.data.cons->cdr;
+                } else if (!prev) {
+                    prefix->car = sm_value_symbol(append);
+                    cons->car = cons->car.data.cons->cdr;
+
+                    // Promote cdr to cons
+                    SmCons* last = sm_heap_alloc_cons(&ctx->heap, ctx);
+                    last->car = cons->cdr;
+                    cons->cdr = sm_value_cons(last);
+                } else {
+                    // Wrap old prefix in new cons
+                    SmCons* wrap = sm_heap_alloc_cons(&ctx->heap, ctx);
+                    wrap->car = sm_value_cons(prefix);
+                    wrap->cdr = sm_value_cons(cons);
+                    *form = sm_value_cons(wrap);
+
+                    // Unlink the current cons from its predecessor
+                    prev->cdr = sm_value_nil();
+
+                    // Create new prefix
+                    prefix = sm_heap_alloc_cons(&ctx->heap, ctx);
+                    prefix->car = sm_value_symbol(append);
+                    prefix->cdr = sm_value_cons(wrap);
+                    *form = sm_value_cons(prefix);
+
+                    // Promote spliced expression to car
+                    cons->car = cons->car.data.cons->cdr;
+
+                    // Promote cdr to cons
+                    SmCons* last = sm_heap_alloc_cons(&ctx->heap, ctx);
+                    last->car = cons->cdr;
+                    cons->cdr = sm_value_cons(last);
+                }
+                continue;
+            }
+        }
+
+        SmError err = build_template(parser, ctx, tok, &cons->car);
+        if (!sm_is_ok(err))
+            return err;
+        if (!sm_value_is_list(cons->cdr) || sm_value_is_quoted(cons->cdr)) {
+            if (sm_value_is_cons(cons->cdr) && sm_value_is_symbol(cons->cdr.data.cons->car) &&
+                cons->cdr.data.cons->car.data.symbol == symbol_splice)
+            {
+                return parser_error(parser, tok, ctx, SmErrorSyntaxError, "splice operator found in list template after dot");
+            }
+
+            prefix->car = sm_value_symbol(list_dot);
+
+            // Promote cdr to cons
+            SmCons* last = sm_heap_alloc_cons(&ctx->heap, ctx);
+            last->car = cons->cdr;
+            cons->cdr = sm_value_cons(last);
+        }
+    }
+
+    return sm_ok;
+}
+
 // Paser functions
 bool sm_parser_finished(SmParser* parser) {
     consume_whitespace(parser);
@@ -439,6 +579,33 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
             else
                 *form = sm_value_nil();
             break;
+
+        case Backquote: {
+            Token start = tok;
+
+            err = sm_parser_parse_form(parser, ctx, form);
+            if (!sm_is_ok(err))
+                break;
+
+            err = build_template(parser, ctx, start, form);
+            break;
+        }
+
+        case Comma: {
+            SmCons* cons = sm_heap_alloc_cons(&ctx->heap, ctx);
+            *form = sm_value_cons(cons);
+            cons->car = sm_value_symbol(symbol_comma);
+            err = sm_parser_parse_form(parser, ctx, &cons->cdr);
+            break;
+        }
+
+        case Splice: {
+            SmCons* cons = sm_heap_alloc_cons(&ctx->heap, ctx);
+            *form = sm_value_cons(cons);
+            cons->car = sm_value_symbol(symbol_splice);
+            err = sm_parser_parse_form(parser, ctx, &cons->cdr);
+            break;
+        }
 
         case Integer:
             *form = sm_value_number(sm_number_int(0));
@@ -485,8 +652,12 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
                         lexer_next(parser);
 
                         tok = lexer_peek(parser);
-                        if (tok.type != Integer && tok.type != Float &&
-                            tok.type != Symbol && tok.type != LParen && tok.type != Quote)
+                        if (tok.type == Splice) {
+                            err = parser_error(parser, tok, ctx, SmErrorSyntaxError, "splice operator found after dot");
+                            break;
+                        } else if (tok.type != Integer && tok.type != Float &&
+                                   tok.type != Symbol && tok.type != LParen &&
+                                   tok.type != Quote && tok.type != Backquote && tok.type != Comma)
                         {
                             err = parser_error(parser, tok, ctx, SmErrorSyntaxError, "form expected after dot");
                             break;
@@ -536,6 +707,9 @@ SmError sm_parser_parse_form(SmParser* parser, SmContext* ctx, SmValue* form) {
             err = parser_error(parser, tok, ctx, SmErrorLexicalError, "unexpected or invalid token");
             break;
     }
+
+    if (UINT8_MAX - form->quotes < quotes)
+        err = parser_error(parser, tok, ctx, SmErrorGeneric, "max quote count exceeded");
 
     if (!sm_is_ok(err))
         *form = sm_value_nil(); // In case of error, drop result
