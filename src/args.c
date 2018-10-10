@@ -48,8 +48,8 @@ SmArgPattern sm_arg_pattern_from_spec(SmString name, SmValue spec) {
 
     pattern.count = sm_list_size(spec.data.cons);
 
-    SmArgPatternArg* args =
-        (SmArgPatternArg*) calloc(pattern.count, sizeof(SmArgPatternArg));
+    SmArgPatternArg* args = (SmArgPatternArg*) sm_aligned_alloc(
+        sm_alignof(SmArgPatternArg), pattern.count*sizeof(SmArgPatternArg));
 
     pattern.args = args;
 
