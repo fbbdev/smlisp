@@ -304,8 +304,13 @@ static Object* object_next(Object* obj) {
     if (!obj || !obj->parent)
         return NULL;
 
-    if (obj == obj->parent->left && obj->parent->right)
-        return object_first(obj->parent->right);
+    if (obj == obj->parent->left) {
+        obj = obj->parent;
+        while (obj->right)
+            obj = object_first(obj->right);
+
+        return obj;
+    }
 
     return obj->parent;
 }
