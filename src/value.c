@@ -147,7 +147,7 @@ void sm_print_value(FILE* f, SmValue value) {
             break;
 
         case SmTypeFunction:
-            fprintf(f, "(lambda ");
+            fprintf(f, "(%s ", value.data.function->macro ? "macro" : "lambda");
             if (value.data.function->args.count > 0 || !value.data.function->args.rest.use)
                 fprintf(f, "(");
 
