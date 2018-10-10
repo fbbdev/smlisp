@@ -673,7 +673,7 @@ SmError SM_BUILTIN_SYMBOL(append)(SmContext* ctx, SmValue args, SmValue* ret) {
         sm_list_copy(ctx, slot->data.cons, tmp);
         *slot = *tmp;
 
-        for (SmCons* cons = slot->data.cons; cons; sm_list_next(cons))
+        for (SmCons* cons = slot->data.cons; cons; cons = sm_list_next(cons))
             slot = &cons->cdr;
 
         *slot = sm_value_nil();
