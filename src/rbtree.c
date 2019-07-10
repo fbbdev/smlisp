@@ -190,8 +190,8 @@ static void repair_after_erase(SmRBTree* tree, Node* n, Node* p) {
 
         // Otherwise, rebalance p's sibling (loop)
         s = (p == p->parent->left) ? p->parent->right : p->parent->left;
-        p = p->parent;
         n = p;
+        p = p->parent;
     }
 
     if (s->color == Red) {
